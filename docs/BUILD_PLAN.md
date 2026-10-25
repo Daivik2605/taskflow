@@ -74,6 +74,20 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 **Done when:** the numbers match Insights for today, this week and this month; tapping 🚬 updates its card immediately; every card opens the right filtered view.
 **You:** look at it on the phone layout (narrow the browser) and check every number against your tasks.
 
+### Phase 2.7 — Routines and recurring tasks (editable, on-demand or scheduled)
+**Status:** not started
+> Do Phase 2.7 of docs/BUILD_PLAN.md (SPEC §16, and the "Everything is editable" note at the top): plan first. Schema (extend `taskflow_schema.sql`, idempotent): `taskflow_routines`; `taskflow_tasks.routine_id`, `occurrence_on` (unique together), status `skipped` + `skip_reason`. `src/lib/routines.ts` (pure, tested): occurrences for every schedule kind incl. weekdays with `week_starts_on`, every N days, monthly day 31 in short months, pause/end dates, DST days; flexible ×/week progress; routine missed vs skipped; streaks; "edit applies from today" (past and done occurrences untouched, untouched future ones regenerated). Lazy idempotent generation for today → +7 days (safe with two devices open). UI: Settings → Routines (create/edit/pause/archive; switching between **On demand** and any schedule at any time); a **Routines picker** on Today ("Did Gym today" → task done now, or "Add to today"); flexible routines show "Gym 1/3 this week" with a Did-it button; occurrence rows with Done · Skip (reason) · Move; routine links to a preset → one-tap log. Seed nothing by default except offering suggestions (Kriya daily, Padmasadna, Gym 3×/week, Home Workout on demand) that I can accept or ignore. Today and the overview count routine occurrences; Insights gets routine adherence and streaks; routine misses are counted separately from tasks missed. (The `routine/done` Shortcuts endpoint comes in phase 3.6.)
+
+**Done when:** Gym set to *on demand* never shows as missed and can be ticked on any day; switching it to *3×/week* shows 0/3 and counts the ticks; Kriya *daily* shows today, can be skipped without counting as missed, and an unticked one becomes a routine miss tomorrow; changing a schedule doesn't alter past days.
+**You:** set up your real routines; try switching Gym between on demand and 3×/week.
+
+### Phase 2.8 — Goals, targets and smoking limits
+**Status:** not started
+> Do Phase 2.8 of docs/BUILD_PLAN.md (SPEC §17): plan first. Schema: `taskflow_goals` (versioned with starts_on/ends_on), `taskflow_counters.reasons`, `taskflow_counter_events.reason`. `src/lib/goals.ts` (pure, tested): progress for every metric (tag minutes incl. sub-tags, counter at-most, routine count, tasks done) per day/week/month, editing creates a new version so past periods keep their old target, days off excluded from daily goals, hit-rate and streak of periods hit. UI: Settings → Goals (create, edit, pause, delete) and from a tag/counter/routine ("Set a goal"); goal progress bars on the overview (Phase 2.6 strip gets a Goals row) and in Insights (hit rate, streak). Counter buttons: today vs limit (amber at, red over), live "time since last", today's longest gap and best gap this week; after a tap an optional reason chip row (editable list per counter in Settings → Counters); Insights → Counters adds reasons by count and by hour of day. Time-based goals show 0 until the timer exists (phase 4) — that's expected.
+
+**Done when:** "Cigarettes ≤ 5/day" turns the button amber at 5 and red at 6; "Gym ≥ 3×/week" fills from routine ticks; changing a target mid-week keeps last week's result judged on the old target; reasons are optional and show in Insights.
+**You:** set your real limits and goals.
+
 ### Phase 3 — PWA + deploy (makes it usable on the iPhone)
 **Status:** not started
 > Do Phase 3 of docs/BUILD_PLAN.md (SPEC §1): plan first. vite-plugin-pwa with manifest, icons (simple generated icon), standalone display, theme colours, a `/capture` home-screen shortcut route (placeholder until phase 9), update prompt when a new version is deployed. Deploy config for Vercel (or Netlify — recommend one), SPA rewrites, env vars documented. Write the exact click-by-click steps for me: create the hosting project from this repo or via CLI, set env vars, add the deployed URL to Supabase → Authentication → URL Configuration, install on iPhone (Safari → Share → Add to Home Screen) and on Mac. Store the deployed URL in `taskflow_settings.taskflow_url`.
@@ -81,12 +95,33 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 **Done when:** the deployed URL works on mobile data (not just home Wi-Fi), the app installs on both devices, and a task added on the phone appears on the Mac within seconds.
 **You:** follow the deploy steps, install on both devices.
 
+### Phase 3.5 — Offline logging
+**Status:** not started
+> Do Phase 3.5 of docs/BUILD_PLAN.md (SPEC §20): plan first. An IndexedDB write queue with client-generated uuids, replayed in order on reconnect, idempotent (upsert on id); covers counter taps (+ reason), timer actions (once built — design the queue so later phases plug in), captures, task create/complete/skip, routine ticks. Optimistic UI, a "N waiting to sync" chip, a retry/discard list after repeated failures, last-write-wins on `updated_at`. Cache the last loaded data (service worker / IndexedDB) so the app opens offline. Replace the phase-1 "writes disabled offline" behaviour with queued writes. Tests for ordering, duplicates on replay and conflicts.
+
+**Done when:** in airplane mode on the iPhone, tap 🚬 three times and complete a task; turn the network on → the Mac shows exactly 3 taps and the completed task, no duplicates.
+**You:** try it on the subway or with airplane mode.
+
+### Phase 3.6 — iPhone Shortcuts, Back Tap and Siri
+**Status:** not started
+> Do Phase 3.6 of docs/BUILD_PLAN.md (SPEC §19): plan first. Edge Function `supabase/functions/taskflow-api` with personal API tokens (`taskflow_api_tokens` hashed, `taskflow_api_log`, Settings → Shortcuts to create/copy-once/revoke), acting only on the token owner's rows; endpoints `counter`, `capture`, `timer/start`, `timer/stop`, `routine/done` (timer endpoints return a clear "timer not built yet" until phase 4 if needed), short spoken-friendly replies, rate limiting, tests (Deno) for auth, wrong user, revoked token and each endpoint. Exact deploy commands (Supabase CLI) and a click-by-click guide with screenshots-in-words for: building each Shortcut (Get Contents of URL, POST, JSON, header with the token), Back Tap double = +1 cigarette and triple = +1 weed, Siri phrases, Action button, home-screen icons. Record in ../docs/DECISIONS.md that this Edge Function uses the service-role key server-side only.
+
+**Done when:** double-tapping the back of the iPhone adds a cigarette that appears in the open app within seconds; "Hey Siri, log a weed" works; a revoked token is rejected.
+**You:** deploy the function, create a token, set up Back Tap and Siri.
+
 ### Phase 4 — Timer + presets
 **Status:** not started
-> Do Phase 4 of docs/BUILD_PLAN.md (SPEC §4, §2b, §14): plan first. Timer screen with Start/Pause/Resume/Stop, tag (via the tag picker) + optional task, a ▶ button on every task row that starts the timer on that task with its tag, logged time and estimate-vs-actual on tasks, live comment, segments model, one active session rule (DB index + UI prompt), running bar on every screen, quick-log presets, add past session, today's sessions list with edit/delete, totals per parent tag and sub-tag for today and this week. Fill the overview strip's **Time** card (study, hustle, work hours for the period). Extend **Insights**: the Day log timeline gains sessions and presets; Range gains hours by parent/sub-tag (stacked bar per day), hours studying per study sub-tag, top tasks by time, estimate vs actual. `src/lib/timer.ts` with tests (pause/resume sums, open segment, sessions across midnight). Realtime: start on one device, pause on the other. Settings → Presets.
+> Do Phase 4 of docs/BUILD_PLAN.md (SPEC §4, §2b, §14): plan first. Timer screen with Start/Pause/Resume/Stop, tag (via the tag picker) + optional task, a ▶ button on every task row that starts the timer on that task with its tag, logged time and estimate-vs-actual on tasks, live comment, segments model, one active session rule (DB index + UI prompt), running bar on every screen, quick-log presets, add past session, today's sessions list with edit/delete, totals per parent tag and sub-tag for today and this week. Fill the overview strip's **Time** card (study, hustle, work hours for the period). Extend **Insights**: the Day log timeline gains sessions and presets; Range gains hours by parent/sub-tag (stacked bar per day), hours studying per study sub-tag, top tasks by time, estimate vs actual. `src/lib/timer.ts` with tests (pause/resume sums, open segment, sessions across midnight). Realtime: start on one device, pause on the other. Settings → Presets. Also: in-app "Still going?" after N hours (setting) with "it ended at…"; timer actions go through the offline queue (3.5); the `timer/start` and `timer/stop` API endpoints (3.6) now work; time-based goals (2.8) now fill; starting the timer on a routine occurrence uses its tag.
 
 **Done when:** start on Mac → pause/resume → stop on phone with a comment; duration correct; closing and reopening the app keeps the timer; a preset tap logs its minutes.
 **You:** use it for a real study session (started from a task) and a Kriya log; check Insights → Day.
+
+### Phase 4.2 — Plan the day, shut down the day, weekly review
+**Status:** not started
+> Do Phase 4.2 of docs/BUILD_PLAN.md (SPEC §18): plan first. Schema: `taskflow_days`, `taskflow_weeks`. Morning plan card (Top 3, today's tasks/routines/deadlines, quick add, energy); evening shutdown (time by tag, tasks, counters, goals; each open task → tomorrow / pick a day / no date / drop; routine occurrences → done / skipped; mood, energy, note) at a configurable time; weekly review screen (last week vs the week before: hours by tag, planned vs actual from goals, goals hit, tasks done/missed/deadlines missed, routine adherence, counters, mood/energy/sleep averages, next 14 days' deadlines; set next week's goals; note; browse past reviews). Top 3 shows pinned on Today and in the overview. Pure functions + tests for the summaries (they must equal Insights for the same range).
+
+**Done when:** an evening shutdown rolls today's unfinished tasks to tomorrow in under a minute, and the weekly review numbers equal Insights for that week.
+**You:** do tonight's shutdown and this Sunday's review.
 
 ### Phase 4.5 — Dashboard contract views (moved up from phase 11 so the dashboard can start early)
 **Status:** not started
@@ -97,14 +132,14 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 
 ### Phase 5 — Action tasks + Nap & reset
 **Status:** not started
-> Do Phase 5 of docs/BUILD_PLAN.md (SPEC §5 and §7): plan first. Action registry and pinned action buttons on Today with live state; Settings → Actions (pin, rename, reorder, hide). Nap + reset flow, popup with Undo/Edit, "Still resetting?" check, editing times. SQL: `taskflow_end_reset(p_app, p_detail, p_at)` exactly as SPEC §7 and `../docs/CONTRACT.md` → Shared calls (security invoker, idempotent, granted to authenticated) — TaskFlow's own timer start under a study, hustle or work tag calls the same function (p_app = 'taskflow'). Realtime toast when another app ended the reset. `src/lib/reset.ts` + SQL tests (run against local Postgres): ends once, second call returns `ended: false`, a `p_at` before the reset started does nothing, nap open at the end. Document the function in docs/DATA_CONTRACT.md. Then mark the "Blocked until" lines in ../InteractiveDSA/docs/BUILD_PLAN.md (Phase 3.6) and ../chart-journal/docs/BUILD_STATUS.md as unblocked — this is the one allowed edit outside this folder besides root docs.
+> Do Phase 5 of docs/BUILD_PLAN.md (SPEC §5 and §7): plan first. Action registry and pinned action buttons on Today with live state; Settings → Actions (pin, rename, reorder, hide). Nap + reset flow, popup with Undo/Edit, "Still resetting?" check, editing times. SQL: `taskflow_end_reset(p_app, p_detail, p_at)` exactly as SPEC §7 and `../docs/CONTRACT.md` → Shared calls (security invoker, idempotent, granted to authenticated) — TaskFlow's own timer start under a study, hustle or work tag calls the same function (p_app = 'taskflow'). Realtime toast when another app ended the reset. Add `nap/start`, `nap/done`, `reset/done` to `taskflow-api` (3.6) and the offline queue. `src/lib/reset.ts` + SQL tests (run against local Postgres): ends once, second call returns `ended: false`, a `p_at` before the reset started does nothing, nap open at the end. Document the function in docs/DATA_CONTRACT.md. Then mark the "Blocked until" lines in ../InteractiveDSA/docs/BUILD_PLAN.md (Phase 3.6) and ../chart-journal/docs/BUILD_STATUS.md as unblocked — this is the one allowed edit outside this folder besides root docs.
 
 **Done when:** start nap → Nap done → start a timer tagged Study / DSA → popup shows nap and reset minutes; calling `select taskflow_end_reset('dsa','test')` in the SQL Editor with a reset open ends it and returns the minutes.
 **You:** then run `../docs/prompts/07-reset-hook.md` in InteractiveDSA (after its sync phases) and in chart-journal.
 
 ### Phase 6 — Shifts + pay rules
 **Status:** not started
-> Do Phase 6 of docs/BUILD_PLAN.md (SPEC §6.1–6.3): **before planning, ask me to confirm the rules for each job — Tim Hortons and Oland Stations —** (early and late clock-in rounding, clock-out rounding, break paid?, break length, after how many hours, hourly rate, pay period length and one real period start date, overtime) and set the job's defaults from my answers — the seeded job has `hourly_rate` and `pay_period_anchor` = null on purpose, so fill them from my answers and remove the "not set" notice (`PAY_NOT_SET_MESSAGE` in `src/lib/pay.ts`) only where pay is then configured. Then plan. Build `src/lib/pay.ts` as pure functions returning paid minutes, flags and a human "working" list, with tests including: 15:02 → paid from 15:05; 30-min unpaid break and 23:00 out → 7h 25m; early clock-in before the scheduled start; no break on a 6-hour shift → flag; left on break at 19:40; weekly overtime past 44 h; a shift crossing midnight. The shift action button flow (punch in/out now or at a chosen time, start/end break, add break minutes, I left on break), punch-in ends an open reset, post-shift summary, shift history with edit, store record entry with my-vs-store difference in minutes and dollars, manager-said-no-deduction → unverified. Settings → Jobs (rate and rule columns). **Commute** (SPEC §6.1): `Heading home` after punch-out starts a Work / Commute session linked to the shift, `I'm home` stops it; `Heading to work` before a shift is stopped by punch-in. Extend **Insights**: hours at work per job (paid) and commute, per day/week/month, in the Day log and Range.
+> Do Phase 6 of docs/BUILD_PLAN.md (SPEC §6.1–6.3): **before planning, ask me to confirm the rules for each job — Tim Hortons and Oland Stations —** (early and late clock-in rounding, clock-out rounding, break paid?, break length, after how many hours, hourly rate, pay period length and one real period start date, overtime) and set the job's defaults from my answers — the seeded job has `hourly_rate` and `pay_period_anchor` = null on purpose, so fill them from my answers and remove the "not set" notice (`PAY_NOT_SET_MESSAGE` in `src/lib/pay.ts`) only where pay is then configured. Then plan. Build `src/lib/pay.ts` as pure functions returning paid minutes, flags and a human "working" list, with tests including: 15:02 → paid from 15:05; 30-min unpaid break and 23:00 out → 7h 25m; early clock-in before the scheduled start; no break on a 6-hour shift → flag; left on break at 19:40; weekly overtime past 44 h; a shift crossing midnight. The shift action button flow (punch in/out now or at a chosen time, start/end break, add break minutes, I left on break), punch-in ends an open reset, post-shift summary, shift history with edit, store record entry with my-vs-store difference in minutes and dollars, manager-said-no-deduction → unverified. Settings → Jobs (rate and rule columns). **Commute** (SPEC §6.1): `Heading home` after punch-out starts a Work / Commute session linked to the shift, `I'm home` stops it; `Heading to work` before a shift is stopped by punch-in. Extend **Insights**: hours at work per job (paid) and commute, per day/week/month, in the Day log and Range. **Scheduled shifts** (SPEC §22): enter upcoming shifts per job (`state = scheduled`), punch-in on that day pre-fills the scheduled times. Add `shift/punch-in`, `shift/break`, `shift/punch-out`, `commute/start`, `commute/stop` to `taskflow-api` and the offline queue, and update the Shortcuts guide.
 
 **Done when:** every test case above passes, and the flow works on the phone with one hand (big buttons, no typing needed for the live path).
 **You:** use it for your next real shift.
@@ -118,10 +153,17 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 
 ### Phase 8 — Calendar, days off, sleep
 **Status:** not started
-> Do Phase 8 of docs/BUILD_PLAN.md (SPEC §8): plan first. Month and week calendar (no heavy calendar library unless justified), per-day shading by focus minutes, tasks due, shifts, sessions, naps/resets, days-off marking; day detail sheet; sleep check-in card on Today (pre-filled), sleep history and 14-day chart (Recharts); `src/lib/streak.ts` with tests where days off neither break nor extend a streak.
+> Do Phase 8 of docs/BUILD_PLAN.md (SPEC §8): plan first. Month and week calendar (no heavy calendar library unless justified), per-day shading by productive (study + hustle) minutes, tasks due, routine occurrences, scheduled and worked shifts, sessions, naps/resets, days-off marking; week view with **free blocks** between shifts, sleep and fixed routines, flagging tasks/routines that overlap a shift (SPEC §22); day detail sheet; sleep check-in card on Today (pre-filled), sleep history and 14-day chart (Recharts); `src/lib/streak.ts` with tests where days off neither break nor extend a streak.
 
 **Done when:** marking a holiday shows on the calendar and a productive (study + hustle) streak skips over it; a sleep entry lands on the wake-up day.
 **You:** mark your known holidays; log tonight's sleep tomorrow.
+
+### Phase 8.5 — Reminders, notifications and app badge
+**Status:** not started
+> Do Phase 8.5 of docs/BUILD_PLAN.md (SPEC §21): plan first. Web Push with VAPID keys (generated and stored as Supabase secrets; public key in the app), `taskflow_push_subscriptions`, a "Turn on notifications" flow that explains iOS needs the home-screen app (16.4+); Edge Function `taskflow-notify` run by pg_cron every 5 minutes (job `taskflow_notify`) that sends due notifications once (dedupe log), honours quiet hours and every per-type setting in Settings → Notifications (deadline reminders with editable days-before list, morning digest, evening shutdown nudge, weekly review nudge, routine time reminders, timer still running, long break, long nap/reset, counter limit reached — off by default, shift starting soon). Badging API: missed + due today. Tests for the "what's due now" logic (pure) incl. quiet hours across midnight and DST. Exact setup commands.
+
+**Done when:** a deadline 2 days away sends exactly one push at the set time on the iPhone; quiet hours hold it until morning; the app icon badge shows missed + due today.
+**You:** allow notifications on the iPhone home-screen app and the Mac; tune the settings.
 
 ### Phase 9 — Inbox + quick capture
 **Status:** not started
@@ -146,10 +188,17 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 
 ### Phase 12 — Photo reading (time cards and paystubs)
 **Status:** not started
-> Do Phase 12 of docs/BUILD_PLAN.md (SPEC §6.5): plan first. Edge Function `supabase/functions/taskflow-read-image` (verifies the JWT, only reads the caller's own file, calls the Claude API with the image, strict JSON schema for time-card punches per day and for paystub totals, validates the response, clear errors). Upload + "Read with Claude" buttons on the shift list and paystub form, pre-filled confirmation screen, nothing saved until confirmed. Give me the exact commands to deploy the function and set the `ANTHROPIC_API_KEY` secret with the Supabase CLI. Tests for the JSON validation with sample responses.
+> Do Phase 12 of docs/BUILD_PLAN.md (SPEC §6.5): plan first. Edge Function `supabase/functions/taskflow-read-image` (verifies the JWT, only reads the caller's own file, calls the Claude API with the image, strict JSON schema for time-card punches per day and for paystub totals, validates the response, clear errors). Upload + "Read with Claude" buttons on the shift list and paystub form, pre-filled confirmation screen, nothing saved until confirmed. Also read a **work schedule photo** into scheduled shifts (SPEC §22), confirmed before saving. Give me the exact commands to deploy the function and set the `ANTHROPIC_API_KEY` secret with the Supabase CLI. Tests for the JSON validation with sample responses.
 
 **Done when:** a real time-card photo pre-fills the right punches, and a malformed response shows an error instead of saving.
 **You:** deploy the function, set the secret, try it with a real photo.
+
+### Phase 12.5 — Claude weekly summary + Patterns
+**Status:** not started
+> Do Phase 12.5 of docs/BUILD_PLAN.md (SPEC §23): plan first. Edge Function `taskflow-weekly-summary` (JWT-verified; builds the week's numbers server-side; sends numbers + task titles only — note bodies only if a setting allows; asks Claude for a short honest summary: went well / slipped / one suggestion; stores it in `taskflow_weeks.ai_summary`; returns token usage so the UI shows the approximate cost). Button in the weekly review; optional automatic Sunday run via pg_cron, off by default. Insights → **Patterns** (after 14+ days): daily cigarettes/weed vs sleep, study minutes, mood, energy, work hours — paired line charts and plain-language correlations with a "correlation, not cause" note; pure, tested stats functions.
+
+**Done when:** a summary for last week appears in the review with its cost; Patterns shows real comparisons once 14 days exist and a friendly "not enough data yet" before.
+**You:** generate your first weekly summary.
 
 ### Phase 13 — Polish and hardening
 **Status:** not started
@@ -157,7 +206,17 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 
 **Done when:** a full day of real use on phone and Mac with no stuck states.
 
+### Phase 13.5 — Plain-words quick add, Cmd+K, trash and export
+**Status:** not started
+> Do Phase 13.5 of docs/BUILD_PLAN.md (SPEC §24): plan first. `src/lib/quickadd.ts` parser (dates, `by`, `!deadline`, `#tag` fuzzy incl. sub-tags, `~estimate`, `@owner`, `every mon wed` / `3x week` → routine) with a large test table, live preview chips in every quick-add box; Cmd+K command menu (search tasks/notes/projects/tags, run any action) and a `?` shortcuts sheet; soft delete (`deleted_at`) on tasks, routines, notes, sessions, counter events, projects, goals with Settings → Trash (restore, auto-empty after 30 days via pg_cron) — and make sure every query, view and stat excludes deleted rows (re-run the view tests); CSV per table + full JSON export in Settings.
+
+**Done when:** `Pass G2 by nov 9 #personal !deadline` creates the right task; Cmd+K → "+1 cigarette" works; a deleted task disappears from every number and comes back on restore.
+**You:** use quick add for a day.
+
 ---
 
 ## Later (SPEC §15)
-iOS Shortcuts / share-sheet capture · Apple Health sleep & workouts import · web-push reminders · recurring tasks · offline capture queue.
+Apple Health sleep & workouts import (through `taskflow-api`) · share-sheet capture from other apps.
+
+## Order at a glance
+2.6 Overview → 2.7 Routines → 2.8 Goals → 3 iPhone install → 3.5 Offline → 3.6 Shortcuts/Back Tap → 4 Timer → 4.2 Plan/shutdown/review → 4.5 Dashboard views → 5 Nap & reset → 6 Shifts → 7 Paystubs → 8 Calendar → 8.5 Notifications → 9 Inbox → 10 Projects → 11 Re-verify views → 12 Photo reading → 12.5 Claude summary + Patterns → 13 Polish → 13.5 Quick add, Cmd+K, trash.

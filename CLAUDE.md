@@ -7,6 +7,8 @@ Read `../CLAUDE.md` (system rules — they all apply here), then `docs/SPEC.md` 
 - Days are America/Toronto dates via `src/lib/time.ts` only — never the browser's local date.
 - Business rules live in pure, unit-tested modules in `src/lib/` (time, tasks, timer, pay, reset, streak). Components stay thin.
 - Anon key only, in `.env.local` (and in the hosting provider's env settings). The Claude API key exists only as a Supabase Edge Function secret — never in this repo or the browser.
+- Edge Functions (`supabase/functions/taskflow-*`) verify the caller (JWT or hashed personal API token) and scope every query to that one user. The service-role key is used only inside functions that have no user session (`taskflow-api`, `taskflow-notify`), never in app code. Secrets (Claude API key, VAPID keys) live only in Supabase secrets.
+- Everything the user can configure (routines, goals, tags, counters, presets, reminders, job rules) is editable and pausable, and edits apply from today forward without rewriting history.
 - Other apps touch TaskFlow **only** through `taskflow_end_reset` (`../docs/CONTRACT.md` → Shared calls). Its signature and return shape are an API: change only by adding, and record it in `docs/DATA_CONTRACT.md` and `../docs/DECISIONS.md`.
 - Contract views (`taskflow_dashboard_*`) are append-only once released.
 - Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passing, and a list of what I should check by hand on the Mac **and** the iPhone.
