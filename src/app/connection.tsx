@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { OUT_OF_DATE } from '../data/db'
 import { supabase } from '../lib/supabase'
 
 interface Conn {
@@ -62,11 +63,11 @@ function HealthCheck({ tick }: { tick: number }) {
       const { data } = await client.auth.getSession()
       if (!data.session || !navigator.onLine) return
       try {
-        const { error } = await client.from('taskflow_settings').select('id').limit(1)
+        // The newest table: if it's missing, the SQL for this version hasn't been run yet.
+        const { error } = await client.from('taskflow_counters').select('id').limit(1)
         if (cancelled) return
         if (!error) clearError()
-        else if (error.code === '42P01' || error.code === 'PGRST205')
-          reportError('TaskFlow tables not found — run supabase/taskflow_schema.sql in the Supabase SQL Editor.')
+        else if (error.code === '42P01' || error.code === 'PGRST205' || error.code === '42703') reportError(OUT_OF_DATE)
         else reportError(error.message)
       } catch (e) {
         if (!cancelled) reportError(e instanceof Error ? e.message : 'Network error')

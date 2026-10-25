@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthGate } from './app/AuthGate'
 import { Shell } from './app/Shell'
@@ -9,6 +10,9 @@ import { Today } from './screens/Today'
 import { Work } from './screens/Work'
 import { Calendar, Inbox, Projects, Timer } from './screens/screens'
 
+// Insights pulls in the charting library, so it loads only when opened.
+const Insights = lazy(() => import('./screens/Insights'))
+
 export default function App() {
   return (
     <AuthGate>
@@ -18,6 +22,7 @@ export default function App() {
             <Route index element={<Today />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="timer" element={<Timer />} />
+            <Route path="insights" element={<Suspense fallback={<p role="status" className="text-sm text-slate-500">Loading…</p>}><Insights /></Suspense>} />
             <Route path="calendar" element={<Calendar />} />
             <Route path="more" element={<More />} />
             <Route path="inbox" element={<Inbox />} />

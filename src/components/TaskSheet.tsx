@@ -1,10 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useConnection } from '../app/connection'
-import { useAreas } from '../data/areas'
+import { useToday } from '../app/useToday'
 import { useProjects } from '../data/projects'
+import { useSettings } from '../data/settings'
 import { useTasks, type TaskPatch } from '../data/tasks'
-import { activeAreas } from '../lib/areas'
-import { childrenOf, parseTags, PRIORITY_LABEL, STATUS_LABEL, type Task, type TaskStatus } from '../lib/tasks'
+import { childrenOf, parseTags, PRIORITY_LABEL, STATUS_LABEL, validateWhen, whenOf, whenPatch, type Task, type TaskStatus, type WhenValue } from '../lib/tasks'
+import { formatDuration, parseDuration } from '../lib/time'
+import { TagPicker } from './TagPicker'
+import { WhenControl } from './WhenControl'
 import { btn, btnDanger, btnPrimary, input, label, select } from './ui'
 
 interface SheetApi { openTask: (id: string) => void }
@@ -52,41 +55,49 @@ export function TaskSheetProvider({ children }: { children: ReactNode }) {
 
 function TaskForm({ task, onClose, onOpen }: { task: Task; onClose: () => void; onOpen: (id: string) => void }) {
   const { tasks, update, remove, add, setDone } = useTasks()
-  const { areas } = useAreas()
   const projects = useProjects()
   const { writesDisabled } = useConnection()
+  const today = useToday()
+  const { weekStartsOn } = useSettings()
 
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description ?? '')
-  const [due, setDue] = useState(task.due_on ?? '')
-  const [areaId, setAreaId] = useState(task.area_id ?? '')
+  const [when, setWhen] = useState<WhenValue>(() => whenOf(task))
+  const [estimate, setEstimate] = useState(task.estimate_minutes ? formatDuration(task.estimate_minutes) : '')
+  const [areaId, setAreaId] = useState<string | null>(task.area_id)
   const [projectId, setProjectId] = useState(task.project_id ?? '')
   const [priority, setPriority] = useState(task.priority)
   const [status, setStatus] = useState<TaskStatus>(task.status)
   const [owner, setOwner] = useState(task.owner)
   const [waitingOn, setWaitingOn] = useState(task.waiting_on ?? '')
-  const [tags, setTags] = useState(task.tags.join(', '))
+  const [labels, setLabels] = useState(task.tags.join(', '))
   const [subTitle, setSubTitle] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const kids = childrenOf(tasks, task.id)
   const parent = task.parent_id ? tasks.find((t) => t.id === task.parent_id) : null
   const owners = useMemo(() => [...new Set(['me', 'Anikait', 'external', ...tasks.map((t) => t.owner)])], [tasks])
-  const pickable = activeAreas(areas).concat(areas.filter((a) => a.archived && a.id === task.area_id))
 
   const save = async (e: FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
+    const whenProblem = validateWhen(when)
+    if (whenProblem) { setError(whenProblem); return }
+    const estimateMinutes = estimate.trim() ? parseDuration(estimate) : null
+    if (estimate.trim() && estimateMinutes === null) { setError('Enter the estimate like 1h 30m, 45m or 90.'); return }
+
     const next = {
-      title: title.trim(), description: description.trim() || null, due_on: due || null, area_id: areaId || null,
-      project_id: projectId || null, priority, status, owner: owner.trim() || 'me', waiting_on: waitingOn.trim() || null, tags: parseTags(tags),
+      title: title.trim(), description: description.trim() || null, ...whenPatch(when), estimate_minutes: estimateMinutes, area_id: areaId,
+      project_id: projectId || null, priority, status, owner: owner.trim() || 'me', waiting_on: waitingOn.trim() || null, tags: parseTags(labels),
     }
     const patch: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(next)) {
       const before = (task as unknown as Record<string, unknown>)[k]
       if (JSON.stringify(before) !== JSON.stringify(v)) patch[k] = v
     }
+    setError(null)
     setSaving(true)
     const ok = Object.keys(patch).length === 0 ? true : await update(task.id, patch as TaskPatch)
     setSaving(false)
@@ -117,21 +128,21 @@ function TaskForm({ task, onClose, onOpen }: { task: Task; onClose: () => void; 
         <textarea className={`${input} mt-1 py-2`} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
       </label>
 
+      <WhenControl value={when} onChange={setWhen} today={today} weekStart={weekStartsOn} />
+
       <div className="grid grid-cols-2 gap-3">
-        <label className={label}>Due date
-          <input className={`${input} mt-1`} type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+        <label className={label}>Estimate <span className="font-normal text-slate-500">(optional)</span>
+          <input className={`${input} mt-1`} value={estimate} onChange={(e) => setEstimate(e.target.value)} placeholder="e.g. 1h 30m" inputMode="text" />
         </label>
         <label className={label}>Status
           <select className={`${select} mt-1`} value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)}>
             {(Object.keys(STATUS_LABEL) as TaskStatus[]).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
           </select>
         </label>
-        <label className={label}>Area
-          <select className={`${select} mt-1`} value={areaId} onChange={(e) => setAreaId(e.target.value)}>
-            <option value="">No area</option>
-            {pickable.map((a) => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (archived)' : ''}</option>)}
-          </select>
-        </label>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className={label}><span className="mb-1 block">Tag</span><TagPicker value={areaId} onChange={setAreaId} allowNone /></div>
         <label className={label}>Project
           <select className={`${select} mt-1`} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
             <option value="">No project</option>
@@ -161,8 +172,8 @@ function TaskForm({ task, onClose, onOpen }: { task: Task; onClose: () => void; 
           <input className={`${input} mt-1`} value={waitingOn} onChange={(e) => setWaitingOn(e.target.value)} placeholder="e.g. Anikait" />
         </label>
       </div>
-      <label className={label}>Tags <span className="font-normal text-slate-500">(comma-separated)</span>
-        <input className={`${input} mt-1`} value={tags} onChange={(e) => setTags(e.target.value)} />
+      <label className={label}>Labels <span className="font-normal text-slate-500">(comma-separated, e.g. agent, urgent)</span>
+        <input className={`${input} mt-1`} value={labels} onChange={(e) => setLabels(e.target.value)} />
       </label>
 
       {!task.parent_id && (
@@ -187,6 +198,8 @@ function TaskForm({ task, onClose, onOpen }: { task: Task; onClose: () => void; 
           </div>
         </div>
       )}
+
+      {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       <div className="flex flex-wrap items-center gap-2 pt-2">
         <button className={`${btnPrimary} flex-1`} disabled={saving || writesDisabled || !title.trim()}>{saving ? 'Saving…' : 'Save'}</button>

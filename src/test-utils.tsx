@@ -6,24 +6,28 @@ import { ConnectionProvider } from './app/connection'
 import { ToastProvider } from './app/toast'
 import { TaskSheetProvider } from './components/TaskSheet'
 import { AreasContext, type AreasApi } from './data/areas'
+import { CountersContext, type CountersApi } from './data/counters'
 import { ProjectsContext } from './data/projects'
+import { SettingsContext } from './data/settings'
 import { TasksContext, type TasksApi } from './data/tasks'
 import type { Area } from './lib/areas'
+import type { Counter, CounterEvent } from './lib/counters'
+import { area } from './lib/fixtures'
 import type { Task } from './lib/tasks'
 
-let n = 0
-export function makeTask(over: Partial<Task> = {}): Task {
-  n++
-  return {
-    id: `t${n}`, title: `Task ${n}`, description: null, area_id: 'a-life', project_id: null, parent_id: null, due_on: null,
-    priority: 2, status: 'todo', owner: 'me', waiting_on: null, tags: [], completed_at: null, sort: n * 10, from_note_id: null,
-    created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z', ...over,
-  }
-}
+export { task as makeTask, done as makeDone } from './lib/fixtures'
 
 export const AREAS: Area[] = [
-  { id: 'a-dsa', name: 'DSA', kind: 'focus', app_key: 'dsa', color: '#6366f1', sort: 0, archived: false },
-  { id: 'a-life', name: 'Life admin', kind: 'life', app_key: null, color: '#a3a3a3', sort: 1, archived: false },
+  area({ id: 'a-study', name: 'Study', kind: 'study', sort: 0, emoji: '📚', color: '#6366f1' }),
+  area({ id: 'a-dsa', name: 'DSA', kind: 'study', sort: 0, parent_id: 'a-study', emoji: '🧩', color: '#6366f1', app_key: 'dsa' }),
+  area({ id: 'a-sql', name: 'SQL', kind: 'study', sort: 1, parent_id: 'a-study', color: '#0ea5e9' }),
+  area({ id: 'a-work', name: 'Work', kind: 'work', sort: 1, emoji: '💼', color: '#dc2626' }),
+  area({ id: 'a-personal', name: 'Personal', kind: 'personal', sort: 2, emoji: '🏠', color: '#a3a3a3' }),
+]
+
+export const COUNTERS: Counter[] = [
+  { id: 'c-cig', name: 'Cigarette', emoji: '🚬', color: '#6b7280', sort: 0, archived: false },
+  { id: 'c-weed', name: 'Weed', emoji: '🌿', color: '#22c55e', sort: 1, archived: false },
 ]
 
 export function fakeTasksApi(tasks: Task[], over: Partial<TasksApi> = {}): TasksApi {
@@ -34,23 +38,56 @@ export function fakeTasksApi(tasks: Task[], over: Partial<TasksApi> = {}): Tasks
   }
 }
 
-export function renderApp(ui: ReactElement, { tasks, api, areas = AREAS, route = '/' }: { tasks?: Task[]; api?: TasksApi; areas?: Area[]; route?: string } = {}) {
-  const tasksApi = api ?? fakeTasksApi(tasks ?? [])
-  const areasApi: AreasApi = { areas, loading: false, add: vi.fn(async () => null), update: vi.fn(async () => null), reorder: vi.fn(async () => true) }
+export function fakeAreasApi(areas: Area[], over: Partial<AreasApi> = {}): AreasApi {
+  return {
+    areas, loading: false,
+    add: vi.fn(async () => null), update: vi.fn(async () => null), reorder: vi.fn(async () => true), merge: vi.fn(async () => null), ...over,
+  }
+}
+
+export function fakeCountersApi(counters: Counter[] = COUNTERS, events: CounterEvent[] = [], over: Partial<CountersApi> = {}): CountersApi {
+  return {
+    counters, events, loading: false,
+    tap: vi.fn(async () => null), removeEvent: vi.fn(async () => true), editEvent: vi.fn(async () => true),
+    addCounter: vi.fn(async () => null), updateCounter: vi.fn(async () => null), reorderCounters: vi.fn(async () => true), ...over,
+  }
+}
+
+interface Opts {
+  tasks?: Task[]; api?: TasksApi
+  areas?: Area[]; areasApi?: AreasApi
+  counters?: Counter[]; events?: CounterEvent[]; countersApi?: CountersApi
+  route?: string; weekStartsOn?: number
+}
+
+export function renderApp(ui: ReactElement, o: Opts = {}) {
+  const tasksApi = o.api ?? fakeTasksApi(o.tasks ?? [])
+  const areasApi = o.areasApi ?? fakeAreasApi(o.areas ?? AREAS)
+  const countersApi = o.countersApi ?? fakeCountersApi(o.counters ?? COUNTERS, o.events ?? [])
   const utils = render(
     <ConnectionProvider>
-      <MemoryRouter initialEntries={[route]}>
+      <MemoryRouter initialEntries={[o.route ?? '/']}>
         <ToastProvider>
-          <AreasContext.Provider value={areasApi}>
-            <ProjectsContext.Provider value={[{ id: 'p-aeo', name: 'AEO Studio', status: 'active' }]}>
-              <TasksContext.Provider value={tasksApi}>
-                <TaskSheetProvider>{ui}</TaskSheetProvider>
-              </TasksContext.Provider>
-            </ProjectsContext.Provider>
-          </AreasContext.Provider>
+          <SettingsContext.Provider value={{ weekStartsOn: o.weekStartsOn ?? 1, setWeekStartsOn: vi.fn(async () => {}) }}>
+            <AreasContext.Provider value={areasApi}>
+              <ProjectsContext.Provider value={[{ id: 'p-aeo', name: 'AEO Studio', status: 'active' }]}>
+                <CountersContext.Provider value={countersApi}>
+                  <TasksContext.Provider value={tasksApi}>
+                    <TaskSheetProvider>{ui}</TaskSheetProvider>
+                  </TasksContext.Provider>
+                </CountersContext.Provider>
+              </ProjectsContext.Provider>
+            </AreasContext.Provider>
+          </SettingsContext.Provider>
         </ToastProvider>
       </MemoryRouter>
     </ConnectionProvider>,
   )
-  return { ...utils, tasksApi, areasApi }
+  return { ...utils, tasksApi, areasApi, countersApi }
+}
+
+/** jsdom has no <dialog> behaviour yet. */
+export function polyfillDialog() {
+  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) { this.setAttribute('open', '') }
+  HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) { this.removeAttribute('open'); this.dispatchEvent(new Event('close')) }
 }

@@ -1,32 +1,24 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useConnection } from '../app/connection'
+import { useToday } from '../app/useToday'
 import { QuickAdd } from '../components/QuickAdd'
 import { TaskList, TaskRow } from '../components/TaskRow'
 import { select } from '../components/ui'
-import { useToday } from '../app/useToday'
 import { useAreas } from '../data/areas'
 import { useProjects } from '../data/projects'
 import { useTasks } from '../data/tasks'
-import { byAreaSort } from '../lib/areas'
-import { DEFAULT_FILTER, filterTasks, groupTasks, reorderWithin, type DueFilter, type StatusFilter, type TaskFilter } from '../lib/tasks'
-import { useConnection } from '../app/connection'
+import { buildTree, tagIdsFor, tagLabel } from '../lib/tags'
+import { filterTasks, groupForView, reorderWithin, VIEWS, type TaskFilter, type ViewKey } from '../lib/tasks'
 
-const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
-  { value: 'open', label: 'Open' }, { value: 'done', label: 'Done' }, { value: 'dropped', label: 'Dropped' }, { value: 'all', label: 'All' },
-]
-const DUE_OPTIONS: { value: DueFilter; label: string }[] = [
-  { value: 'any', label: 'Any date' }, { value: 'overdue', label: 'Overdue' }, { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This week' }, { value: 'later', label: 'Later' }, { value: 'none', label: 'No date' },
-]
+const isView = (v: string | null): v is ViewKey => VIEWS.some((x) => x.key === v)
 
-function readFilter(p: URLSearchParams): TaskFilter {
-  const status = p.get('status') as StatusFilter | null
-  const due = p.get('due') as DueFilter | null
-  return {
-    area: p.get('area') || undefined, project: p.get('project') || undefined, owner: p.get('owner') || undefined, tag: p.get('tag') || undefined,
-    status: STATUS_OPTIONS.some((o) => o.value === status) ? status! : DEFAULT_FILTER.status,
-    due: DUE_OPTIONS.some((o) => o.value === due) ? due! : DEFAULT_FILTER.due,
-  }
+const EMPTY: Record<ViewKey, string> = {
+  today: 'Nothing for today. Add a task above, or look under Upcoming.',
+  upcoming: 'Nothing scheduled to start later.',
+  deadlines: 'No open deadlines. Set one from a task: When → Deadline.',
+  anytime: 'No undated tasks.',
+  done: 'Nothing finished yet.',
 }
 
 export function Tasks() {
@@ -36,62 +28,78 @@ export function Tasks() {
   const projects = useProjects()
   const { writesDisabled } = useConnection()
   const [params, setParams] = useSearchParams()
-  const filter = readFilter(params)
 
-  const setFilter = (key: string, value: string, fallback = '') => {
+  const view: ViewKey = isView(params.get('view')) ? (params.get('view') as ViewKey) : 'today'
+  const tag = params.get('tag') || ''
+  const project = params.get('project') || ''
+  const owner = params.get('owner') || ''
+  const label = params.get('label') || ''
+
+  const set = (key: string, value: string) => {
     const next = new URLSearchParams(params)
-    if (!value || value === fallback) next.delete(key)
+    if (!value || (key === 'view' && value === 'today')) next.delete(key)
     else next.set(key, value)
     setParams(next, { replace: true })
   }
 
-  // Sub-tasks only appear here when they carry their own due date; otherwise they live inside their parent.
-  const visible = useMemo(() => filterTasks(tasks.filter((t) => t.parent_id === null || t.due_on !== null), filter, today), [tasks, filter, today])
-  const groups = useMemo(() => groupTasks(visible, today), [visible, today])
+  const filter: TaskFilter = { areaIds: tag ? tagIdsFor(areas, tag) : undefined, project: project || undefined, owner: owner || undefined, label: label || undefined }
+  // Sub-tasks only appear here when they carry their own date; otherwise they live inside their parent.
+  const base = useMemo(() => filterTasks(tasks.filter((t) => t.parent_id === null || t.due_on !== null), filter), // eslint-disable-line react-hooks/exhaustive-deps
+    [tasks, tag, project, owner, label, areas])
+  const groups = useMemo(() => groupForView(base, view, today), [base, view, today])
   const owners = useMemo(() => [...new Set(tasks.map((t) => t.owner))].sort(), [tasks])
-  const tags = useMemo(() => [...new Set(tasks.flatMap((t) => t.tags))].sort(), [tasks])
-  const filtered = filter.area || filter.project || filter.owner || filter.tag || filter.status !== 'open' || filter.due !== 'any'
+  const labels = useMemo(() => [...new Set(tasks.flatMap((t) => t.tags))].sort(), [tasks])
+  const tree = useMemo(() => buildTree(areas), [areas])
+  const filtered = tag || project || owner || label
 
   return (
     <section className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl font-semibold">Tasks</h1>
       <QuickAdd />
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="group" aria-label="Filters">
-        <select className={select} aria-label="Status" value={filter.status} onChange={(e) => setFilter('status', e.target.value, 'open')}>
-          {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      <div role="tablist" aria-label="Views" className="-mx-1 flex gap-1 overflow-x-auto px-1">
+        {VIEWS.map((v) => (
+          <button key={v.key} role="tab" aria-selected={view === v.key} onClick={() => set('view', v.key)}
+            className={`min-h-11 shrink-0 rounded-full px-4 text-sm font-medium ${view === v.key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Filters">
+        <select className={select} aria-label="Tag" value={tag} onChange={(e) => set('tag', e.target.value)}>
+          <option value="">All tags</option>
+          {tree.map((n) => (
+            <optgroup key={n.tag.id} label={tagLabel(n.tag)}>
+              <option value={n.tag.id}>{n.children.length ? `All of ${n.tag.name}` : n.tag.name}</option>
+              {n.children.map((c) => <option key={c.id} value={c.id}>{tagLabel(c)}</option>)}
+            </optgroup>
+          ))}
         </select>
-        <select className={select} aria-label="Due" value={filter.due} onChange={(e) => setFilter('due', e.target.value, 'any')}>
-          {DUE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <select className={select} aria-label="Area" value={filter.area ?? ''} onChange={(e) => setFilter('area', e.target.value)}>
-          <option value="">All areas</option>
-          {[...areas].sort(byAreaSort).map((a) => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (archived)' : ''}</option>)}
-        </select>
-        <select className={select} aria-label="Project" value={filter.project ?? ''} onChange={(e) => setFilter('project', e.target.value)}>
+        <select className={select} aria-label="Project" value={project} onChange={(e) => set('project', e.target.value)}>
           <option value="">All projects</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <select className={select} aria-label="Owner" value={filter.owner ?? ''} onChange={(e) => setFilter('owner', e.target.value)}>
+        <select className={select} aria-label="Owner" value={owner} onChange={(e) => set('owner', e.target.value)}>
           <option value="">Any owner</option>
           {owners.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
-        <select className={select} aria-label="Tag" value={filter.tag ?? ''} onChange={(e) => setFilter('tag', e.target.value)}>
-          <option value="">Any tag</option>
-          {tags.map((t) => <option key={t} value={t}>#{t}</option>)}
+        <select className={select} aria-label="Label" value={label} onChange={(e) => set('label', e.target.value)}>
+          <option value="">Any label</option>
+          {labels.map((t) => <option key={t} value={t}>#{t}</option>)}
         </select>
       </div>
-      {filtered && <button className="text-sm text-indigo-600 dark:text-indigo-400" onClick={() => setParams({}, { replace: true })}>Clear filters</button>}
+      {filtered && <button className="text-sm text-indigo-600 dark:text-indigo-400" onClick={() => { const n = new URLSearchParams(); if (view !== 'today') n.set('view', view); setParams(n, { replace: true }) }}>Clear filters</button>}
 
       {loading ? <p role="status" className="text-sm text-slate-500">Loading tasks…</p>
-        : groups.length === 0 ? <p className="text-sm text-slate-500">{tasks.length === 0 ? 'No tasks yet — add your first one above.' : 'No tasks match these filters.'}</p>
+        : groups.length === 0 ? <p className="text-sm text-slate-500">{filtered ? 'No tasks match these filters.' : tasks.length === 0 ? 'No tasks yet — add your first one above.' : EMPTY[view]}</p>
         : groups.map((g) => (
           <div key={g.key}>
-            <h2 className={`mb-1 text-sm font-semibold uppercase tracking-wide ${g.key === 'overdue' ? 'text-red-600 dark:text-red-400' : 'text-slate-500'}`}>{g.label} <span className="font-normal">· {g.tasks.length}</span></h2>
+            <h2 className={`mb-1 text-sm font-semibold uppercase tracking-wide ${g.key === 'missed' ? 'text-red-600 dark:text-red-400' : 'text-slate-500'}`}>{g.label} <span className="font-normal">· {g.tasks.length}</span></h2>
             <TaskList>
               {g.tasks.map((t, i) => (
-                <TaskRow key={t.id} task={t} today={today}
-                  reorder={g.key === 'closed' ? undefined : { canUp: i > 0, canDown: i < g.tasks.length - 1, onMove: (dir) => void reorder(reorderWithin(g.tasks, t.id, dir)) }} />
+                <TaskRow key={t.id} task={t} today={today} triage={view === 'today' && g.key === 'missed'}
+                  reorder={g.reorderable ? { canUp: i > 0, canDown: i < g.tasks.length - 1, onMove: (dir) => void reorder(reorderWithin(g.tasks, t.id, dir)) } : undefined} />
               ))}
             </TaskList>
           </div>

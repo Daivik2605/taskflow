@@ -7,12 +7,13 @@ export const TABS: NavItem[] = [
   { to: '/', label: 'Today', icon: 'today' },
   { to: '/tasks', label: 'Tasks', icon: 'tasks' },
   { to: '/timer', label: 'Timer', icon: 'timer' },
-  { to: '/calendar', label: 'Calendar', icon: 'calendar' },
+  { to: '/insights', label: 'Insights', icon: 'insights' },
   { to: '/more', label: 'More', icon: 'more' },
 ]
 
 /** What "More" opens (also listed under the main items in the desktop sidebar). */
 export const MORE: NavItem[] = [
+  { to: '/calendar', label: 'Calendar', icon: 'calendar' },
   { to: '/inbox', label: 'Inbox', icon: 'inbox' },
   { to: '/projects', label: 'Projects', icon: 'projects' },
   { to: '/work', label: 'Work', icon: 'work' },

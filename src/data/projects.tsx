@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useConnection } from '../app/connection'
-import { db } from './db'
+import { db, friendlyDbError } from './db'
 
 export interface ProjectRef { id: string; name: string; status: string }
 
@@ -17,7 +17,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     const load = async () => {
       const { data, error } = await db().from('taskflow_projects').select('id,name,status').order('name')
       if (cancelled) return
-      if (error) reportError(error.message)
+      if (error) reportError(friendlyDbError(error))
       else setProjects((data ?? []) as ProjectRef[])
     }
     void load()

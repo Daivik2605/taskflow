@@ -1,95 +1,95 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fakeTasksApi, makeTask, renderApp } from '../test-utils'
-import { Tasks } from './Tasks'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fakeTasksApi, makeDone, makeTask, polyfillDialog, renderApp } from '../test-utils'
 import { Today } from './Today'
 
+beforeAll(polyfillDialog)
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-10T15:00:00Z')) }) // Tue 10 Nov, Toronto
-afterEach(() => { vi.useRealTimers() })
+afterEach(() => { vi.useRealTimers(); localStorage.clear() })
 
 const tasks = () => [
-  makeTask({ title: 'Pass G2', due_on: '2026-11-09' }), // due yesterday
-  makeTask({ title: 'Call Mom', due_on: '2026-11-10' }),
+  makeTask({ title: 'Pass G2', due_on: '2026-11-09' }), // missed (made before revision 2: no start day)
+  makeTask({ title: 'Renew passport', due_on: '2026-11-08', hard_deadline: true }), // missed deadline
+  makeTask({ title: 'Call Mom', start_on: '2026-11-10', due_on: '2026-11-10' }),
+  makeTask({ title: 'Finish week 3', start_on: '2026-11-08', due_on: '2026-11-14' }), // in a window
+  makeTask({ title: 'Tax return', due_on: '2026-11-20', hard_deadline: true }), // deadline in 10 days
+  makeTask({ title: 'Far deadline', due_on: '2026-12-31', hard_deadline: true }), // not within 14 days
+  makeTask({ title: 'Starts later', start_on: '2026-11-12', due_on: '2026-11-12' }), // upcoming
   makeTask({ title: 'Someday thing' }),
-  makeTask({ title: 'Later thing', due_on: '2026-12-01' }),
-  makeTask({ title: 'Already done', due_on: '2026-11-10', status: 'done', completed_at: '2026-11-10T14:00:00Z' }),
+  makeDone('2026-11-10', '2026-11-10T14:00:00Z', { title: 'Already done' }),
   makeTask({ title: 'A sub-task', parent_id: 'x', due_on: '2026-11-09' }),
 ]
 
+const headings = () => screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.replace(/\s+/g, ' ').trim())
+
 describe('Today', () => {
-  it('lists overdue, due today and no-date tasks, and hides later and sub-tasks', () => {
+  it('lists missed, deadlines in the next 14 days, today, in a window, no date, done today', () => {
     renderApp(<Today />, { tasks: tasks() })
-    const heading = (name: RegExp) => screen.getByRole('heading', { name })
-    expect(heading(/^Overdue/)).toBeInTheDocument()
-    expect(heading(/^Due today/)).toBeInTheDocument()
-    expect(heading(/^No date/)).toBeInTheDocument()
-    expect(heading(/^Done today/)).toBeInTheDocument()
-    expect(screen.getByText('Pass G2')).toBeInTheDocument()
-    expect(screen.getByText('Yesterday')).toBeInTheDocument()
-    expect(screen.getByText('Call Mom')).toBeInTheDocument()
-    expect(screen.getByText('Someday thing')).toBeInTheDocument()
-    expect(screen.queryByText('Later thing')).toBeNull()
-    expect(screen.queryByText('A sub-task')).toBeNull()
+    expect(headings()).toEqual([
+      'Missed · 2 reschedule or drop', 'Deadlines in the next 14 days · 1', 'Today · 1', 'In a window · 1', 'No date · 1', 'Done today · 1'])
   })
-  it('shows done · missed · left for today, this week and all time', () => {
+  it('hides upcoming tasks, far deadlines and sub-tasks', () => {
     renderApp(<Today />, { tasks: tasks() })
-    const counters = within(screen.getByRole('group', { name: 'Counters' }))
-    expect(counters.getByLabelText('Today done')).toHaveTextContent('1')
-    expect(counters.getByLabelText('Today missed')).toHaveTextContent('0')
-    expect(counters.getByLabelText('Today left')).toHaveTextContent('1')
-    expect(counters.getByLabelText('This week missed')).toHaveTextContent('1') // Pass G2 (Mon 9 Nov)
-    expect(counters.getByLabelText('All time left')).toHaveTextContent('4') // G2, Call Mom, Someday, Later
+    for (const t of ['Starts later', 'Far deadline', 'A sub-task']) expect(screen.queryByText(t)).toBeNull()
+    for (const t of ['Pass G2', 'Renew passport', 'Call Mom', 'Finish week 3', 'Tax return', 'Someday thing', 'Already done']) expect(screen.getByText(t)).toBeInTheDocument()
   })
-  it('ticking a task completes it', async () => {
+  it('shows chips: missed, deadline countdown, window days left, today', () => {
+    renderApp(<Today />, { tasks: tasks() })
+    const chipOf = (title: string) => within(screen.getByText(title).closest('li')!)
+    expect(chipOf('Pass G2').getByText('Missed')).toBeInTheDocument()
+    expect(screen.getByText('⚑ Deadline missed')).toBeInTheDocument()
+    expect(screen.getByText('⚑ Deadline in 10 days')).toBeInTheDocument()
+    expect(screen.getByText('Window · 5 days left')).toBeInTheDocument()
+    expect(chipOf('Call Mom').getByText('Today')).toBeInTheDocument()
+  })
+  it('shows done · missed · deadlines missed · left for today, week, month and all time', () => {
+    renderApp(<Today />, { tasks: tasks() })
+    const t = within(screen.getByRole('table', { name: 'Task counters' }))
+    expect(t.getByLabelText('Today done')).toHaveTextContent('1')
+    expect(t.getByLabelText('Today left')).toHaveTextContent('1') // Call Mom
+    expect(t.getByLabelText('Week missed')).toHaveTextContent('1') // Pass G2 (Mon 9 Nov)
+    expect(t.getByLabelText('Week deadlines missed')).toHaveTextContent('0')
+    expect(t.getByLabelText('Month deadlines missed')).toHaveTextContent('1') // Renew passport (8 Nov)
+    expect(t.getByLabelText('All left')).toHaveTextContent('5') // Call Mom, Finish week 3, Tax return, Far deadline, Someday
+  })
+  it('ticking a task completes it; un-ticking a finished one re-opens it', async () => {
     const api = fakeTasksApi(tasks())
     renderApp(<Today />, { api })
     await userEvent.click(screen.getByRole('checkbox', { name: 'Mark done: Call Mom' }))
     expect(api.setDone).toHaveBeenCalledWith(expect.any(String), true)
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Mark not done: Already done' }))
+    expect(api.setDone).toHaveBeenLastCalledWith(expect.any(String), false)
   })
-  it('un-ticking a finished task re-opens it', async () => {
+  it('missed tasks can be moved to today, rescheduled or dropped; a missed deadline cannot just be moved', async () => {
     const api = fakeTasksApi(tasks())
     renderApp(<Today />, { api })
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Mark not done: Already done' }))
-    expect(api.setDone).toHaveBeenCalledWith(expect.any(String), false)
+    const pass = screen.getByText('Pass G2').closest('li')!
+    await userEvent.click(within(pass).getByRole('button', { name: 'Do today' }))
+    expect(api.update).toHaveBeenCalledWith(api.tasks.find((t) => t.title === 'Pass G2')!.id, { due_on: '2026-11-10' })
+    await userEvent.click(within(pass).getByRole('button', { name: 'Drop' }))
+    expect(api.update).toHaveBeenLastCalledWith(expect.any(String), { status: 'dropped' })
+    const passport = screen.getByText('Renew passport').closest('li')!
+    expect(within(passport).queryByRole('button', { name: 'Do today' })).toBeNull()
+    await userEvent.click(within(passport).getByRole('button', { name: 'Reschedule' }))
+    expect(await screen.findByLabelText('Title')).toHaveValue('Renew passport')
   })
-  it('quick add on Today defaults to today and Life admin', async () => {
+  it('quick add on Today defaults to today and the Personal tag', async () => {
     const api = fakeTasksApi([])
     renderApp(<Today />, { api })
-    expect(screen.getByLabelText('Area')).toHaveValue('a-life')
+    expect(screen.getByRole('button', { name: 'Tag' })).toHaveTextContent('Personal')
     await userEvent.type(screen.getByLabelText('Task title'), 'Pass G2{Enter}')
-    expect(api.add).toHaveBeenCalledWith({ title: 'Pass G2', due_on: '2026-11-10', area_id: 'a-life' })
+    expect(api.add).toHaveBeenCalledWith({ title: 'Pass G2', due_on: '2026-11-10', area_id: 'a-personal' })
   })
   it('says so when there are no tasks at all', () => {
     renderApp(<Today />, { tasks: [] })
     expect(screen.getByText(/No tasks yet/)).toBeInTheDocument()
   })
-})
-
-describe('Tasks screen', () => {
-  it('groups by due date', () => {
-    renderApp(<Tasks />, { tasks: tasks(), route: '/tasks' })
-    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
-    // the sub-task with its own due date shows here (under Overdue); the done task is hidden by the default Open filter
-    expect(headings).toEqual(['Overdue · 2', 'Today · 1', 'Later · 1', 'No date · 1'])
-  })
-  it('filters from the URL, and shows closed tasks when asked', () => {
-    renderApp(<Tasks />, { tasks: tasks(), route: '/tasks?status=done' })
-    expect(screen.getByText('Already done')).toBeInTheDocument()
-    expect(screen.queryByText('Pass G2')).toBeNull()
-    expect(screen.getByText('Clear filters')).toBeInTheDocument()
-  })
-  it('filters by due window', () => {
-    renderApp(<Tasks />, { tasks: tasks(), route: '/tasks?due=overdue' })
-    expect(screen.getByText('Pass G2')).toBeInTheDocument()
-    expect(screen.queryByText('Call Mom')).toBeNull()
-  })
-  it('reorder buttons move a task within its group', async () => {
-    const t = [makeTask({ title: 'First', due_on: '2026-12-01', sort: 10 }), makeTask({ title: 'Second', due_on: '2026-12-01', sort: 20 })]
-    const api = fakeTasksApi(t)
-    renderApp(<Tasks />, { api, route: '/tasks' })
-    expect(screen.getByRole('button', { name: 'Move up: First' })).toBeDisabled()
-    await userEvent.click(screen.getByRole('button', { name: 'Move up: Second' }))
-    expect(api.reorder).toHaveBeenCalledWith([{ id: t[1].id, sort: 10 }, { id: t[0].id, sort: 20 }])
+  it('puts the counter buttons above everything else', () => {
+    renderApp(<Today />, { tasks: [] })
+    const group = screen.getByRole('group', { name: 'Counters' })
+    const form = screen.getByRole('form', { name: 'Quick add task' })
+    expect(group.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(group).getAllByRole('button', { name: /Tap to add one/ })).toHaveLength(2)
   })
 })

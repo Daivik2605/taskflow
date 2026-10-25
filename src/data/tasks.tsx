@@ -2,9 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useConnection } from '../app/connection'
 import { useToast } from '../app/toast'
 import { applyChange, applyStatus, buildNewTask, nextSort, type NewTaskInput, type Task, type TaskStatus } from '../lib/tasks'
-import { db, errorMessage } from './db'
+import { db, errorMessage, fetchAll, friendlyDbError } from './db'
 
-export type TaskPatch = Partial<Pick<Task, 'title' | 'description' | 'area_id' | 'project_id' | 'due_on' | 'priority' | 'owner' | 'waiting_on' | 'tags' | 'sort'>> & { status?: TaskStatus }
+export type TaskPatch = Partial<Pick<Task, 'title' | 'description' | 'area_id' | 'project_id' | 'start_on' | 'due_on' | 'hard_deadline' | 'estimate_minutes' | 'priority' | 'owner' | 'waiting_on' | 'tags' | 'sort'>> & { status?: TaskStatus }
 
 export interface TasksApi {
   tasks: Task[]
@@ -24,7 +24,7 @@ export function useTasks(): TasksApi {
   return c
 }
 
-const COLUMNS = 'id,title,description,area_id,project_id,parent_id,due_on,priority,status,owner,waiting_on,tags,completed_at,sort,from_note_id,created_at,updated_at'
+const COLUMNS = 'id,title,description,area_id,project_id,parent_id,start_on,due_on,hard_deadline,estimate_minutes,priority,status,owner,waiting_on,tags,completed_at,sort,from_note_id,created_at,updated_at'
 
 export function TasksProvider({ children }: { children: ReactNode }) {
   const { writesDisabled, reportError } = useConnection()
@@ -44,10 +44,10 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const client = db()
     let cancelled = false
     const load = async () => {
-      const { data, error } = await client.from('taskflow_tasks').select(COLUMNS).order('sort')
+      const { data, error } = await fetchAll<Task>('taskflow_tasks', COLUMNS, 'sort')
       if (cancelled) return
-      if (error) { reportError(error.message); return }
-      ref.current = (data ?? []) as Task[]
+      if (error) { reportError(friendlyDbError(error)); return }
+      ref.current = data
       setTasksState(ref.current)
       setLoading(false)
     }
@@ -82,17 +82,17 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const { error } = await send()
     if (!error) return true
     rollback()
-    toast.show(`${label} failed: ${error.message}`, () => void write(label, optimistic, send))
+    toast.show(`${label} failed: ${friendlyDbError(error)}`, () => void write(label, optimistic, send))
     return false
   }, [toast])
 
   const add = useCallback<TasksApi['add']>(async (input) => {
     const row = buildNewTask(input, nextSort(ref.current), new Date(), crypto.randomUUID())
     if (!row) return null
-    const { id, title, description, area_id, project_id, parent_id, due_on, priority, status, owner, waiting_on, tags, completed_at, sort } = row
+    const { id, title, description, area_id, project_id, parent_id, start_on, due_on, hard_deadline, estimate_minutes, priority, status, owner, waiting_on, tags, completed_at, sort } = row
     const ok = await write('Adding the task',
       () => { setTasks((l) => [...l, row]); return () => setTasks((l) => l.filter((t) => t.id !== id)) },
-      () => db().from('taskflow_tasks').insert({ id, title, description, area_id, project_id, parent_id, due_on, priority, status, owner, waiting_on, tags, completed_at, sort }))
+      () => db().from('taskflow_tasks').insert({ id, title, description, area_id, project_id, parent_id, start_on, due_on, hard_deadline, estimate_minutes, priority, status, owner, waiting_on, tags, completed_at, sort }))
     return ok ? row : null
   }, [write, setTasks])
 

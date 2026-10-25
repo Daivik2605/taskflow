@@ -1,30 +1,44 @@
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
+import { CounterButtons } from '../components/CounterButtons'
 import { QuickAdd } from '../components/QuickAdd'
 import { TaskList, TaskRow } from '../components/TaskRow'
 import { card } from '../components/ui'
-import { useToday } from '../app/useToday'
+import { useSettings } from '../data/settings'
 import { useTasks } from '../data/tasks'
-import { counts, todaySections, type WindowKey } from '../lib/tasks'
+import { useToday } from '../app/useToday'
+import { counts, todaySections, type Task, type WindowKey } from '../lib/tasks'
 import { formatDay } from '../lib/time'
 
-const WINDOWS: { key: WindowKey; label: string }[] = [{ key: 'today', label: 'Today' }, { key: 'week', label: 'This week' }, { key: 'all', label: 'All time' }]
+const WINDOWS: { key: WindowKey; label: string }[] = [
+  { key: 'today', label: 'Today' }, { key: 'week', label: 'Week' }, { key: 'month', label: 'Month' }, { key: 'all', label: 'All' },
+]
+const ROWS = [
+  { key: 'done', label: 'Done', tone: 'text-emerald-600 dark:text-emerald-400' },
+  { key: 'missed', label: 'Missed', tone: 'text-red-600 dark:text-red-400' },
+  { key: 'deadlinesMissed', label: 'Deadlines missed', tone: 'text-red-600 dark:text-red-400' },
+  { key: 'left', label: 'Left', tone: '' },
+] as const
 
-function Section({ title, tone, children, count }: { title: string; tone?: 'red'; count: number; children: React.ReactNode }) {
-  if (count === 0) return null
+function Section({ title, tone, hint, tasks, children }: { title: string; tone?: 'red'; hint?: string; tasks: Task[]; children: (t: Task) => ReactNode }) {
+  if (tasks.length === 0) return null
   return (
     <div>
-      <h2 className={`mb-1 text-sm font-semibold uppercase tracking-wide ${tone === 'red' ? 'text-red-600 dark:text-red-400' : 'text-slate-500'}`}>{title} <span className="font-normal">· {count}</span></h2>
-      <TaskList>{children}</TaskList>
+      <h2 className={`mb-1 text-sm font-semibold uppercase tracking-wide ${tone === 'red' ? 'text-red-600 dark:text-red-400' : 'text-slate-500'}`}>
+        {title} <span className="font-normal">· {tasks.length}</span>{hint && <> <span className="ml-2 font-normal normal-case tracking-normal text-slate-500">{hint}</span></>}
+      </h2>
+      <TaskList>{tasks.map(children)}</TaskList>
     </div>
   )
 }
 
 export function Today() {
   const today = useToday()
+  const { weekStartsOn } = useSettings()
   const { tasks, loading } = useTasks()
   const sections = useMemo(() => todaySections(tasks, today), [tasks, today])
-  const stats = useMemo(() => WINDOWS.map((w) => ({ ...w, ...counts(tasks, today, w.key) })), [tasks, today])
-  const nothingOpen = sections.overdue.length + sections.dueToday.length + sections.noDate.length === 0
+  const stats = useMemo(() => WINDOWS.map((w) => ({ ...w, ...counts(tasks, today, w.key, weekStartsOn) })), [tasks, today, weekStartsOn])
+  const row = (t: Task, triage = false) => <TaskRow key={t.id} task={t} today={today} triage={triage} />
+  const nothingOpen = sections.missed.length + sections.deadlines.length + sections.today.length + sections.inWindow.length + sections.noDate.length === 0
 
   return (
     <section className="mx-auto max-w-2xl space-y-5">
@@ -33,28 +47,36 @@ export function Today() {
         <p className="text-sm text-slate-500">{formatDay(today)}</p>
       </header>
 
+      <CounterButtons />
+
       <QuickAdd defaultDue={today} />
 
-      <div className={`${card} grid grid-cols-3 divide-x divide-slate-200 dark:divide-slate-800`} role="group" aria-label="Counters">
-        {stats.map((s) => (
-          <div key={s.key} className="p-3 text-center">
-            <div className="text-xs font-medium text-slate-500">{s.label}</div>
-            <dl className="mt-1 space-y-0.5 text-sm">
-              <div className="flex justify-between gap-1"><dt className="text-slate-500">Done</dt><dd className="font-semibold text-emerald-600 dark:text-emerald-400" aria-label={`${s.label} done`}>{s.done}</dd></div>
-              <div className="flex justify-between gap-1"><dt className="text-slate-500">Missed</dt><dd className="font-semibold text-red-600 dark:text-red-400" aria-label={`${s.label} missed`}>{s.missed}</dd></div>
-              <div className="flex justify-between gap-1"><dt className="text-slate-500">Left</dt><dd className="font-semibold" aria-label={`${s.label} left`}>{s.left}</dd></div>
-            </dl>
-          </div>
-        ))}
-      </div>
+      <table className={`${card} w-full table-fixed text-center text-sm`} aria-label="Task counters">
+        <thead>
+          <tr className="text-xs font-medium text-slate-500">
+            <th scope="col" className="w-[34%] p-2 text-left font-medium"><span className="sr-only">Counter</span></th>
+            {WINDOWS.map((w) => <th key={w.key} scope="col" className="p-2 font-medium">{w.label}</th>)}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+          {ROWS.map((r) => (
+            <tr key={r.key}>
+              <th scope="row" className="p-2 text-left text-xs font-medium text-slate-500">{r.label}</th>
+              {stats.map((s) => <td key={s.key} className={`p-2 font-semibold ${r.tone}`} aria-label={`${s.label} ${r.label.toLowerCase()}`}>{s[r.key]}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       {loading ? <p role="status" className="text-sm text-slate-500">Loading tasks…</p> : (
         <>
-          <Section title="Overdue" tone="red" count={sections.overdue.length}>{sections.overdue.map((t) => <TaskRow key={t.id} task={t} today={today} />)}</Section>
-          <Section title="Due today" count={sections.dueToday.length}>{sections.dueToday.map((t) => <TaskRow key={t.id} task={t} today={today} />)}</Section>
-          <Section title="No date" count={sections.noDate.length}>{sections.noDate.map((t) => <TaskRow key={t.id} task={t} today={today} />)}</Section>
-          {nothingOpen && <p className="text-sm text-slate-500">{tasks.length === 0 ? 'No tasks yet — add your first one above.' : 'Nothing overdue, due today or undated. Clear.'}</p>}
-          <Section title="Done today" count={sections.doneToday.length}>{sections.doneToday.map((t) => <TaskRow key={t.id} task={t} today={today} />)}</Section>
+          <Section title="Missed" tone="red" hint="reschedule or drop" tasks={sections.missed}>{(t) => row(t, true)}</Section>
+          <Section title="Deadlines in the next 14 days" tasks={sections.deadlines}>{(t) => row(t)}</Section>
+          <Section title="Today" tasks={sections.today}>{(t) => row(t)}</Section>
+          <Section title="In a window" tasks={sections.inWindow}>{(t) => row(t)}</Section>
+          <Section title="No date" tasks={sections.noDate}>{(t) => row(t)}</Section>
+          {nothingOpen && <p className="text-sm text-slate-500">{tasks.length === 0 ? 'No tasks yet — add your first one above.' : 'Nothing missed, due, in a window or undated. Clear.'}</p>}
+          <Section title="Done today" tasks={sections.doneToday}>{(t) => row(t)}</Section>
         </>
       )}
     </section>

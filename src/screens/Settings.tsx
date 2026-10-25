@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useAuth } from '../app/auth'
-import { AreasSettings } from './settings/AreasSettings'
+import { CountersSettings } from './settings/CountersSettings'
+import { TagsSettings } from './settings/TagsSettings'
+import { useSettings } from '../data/settings'
+import { select, sectionTitle } from '../components/ui'
 import { applyTheme, getStoredTheme, type Theme } from '../lib/theme'
 
 const THEMES: { value: Theme; label: string }[] = [
@@ -10,6 +13,7 @@ const THEMES: { value: Theme; label: string }[] = [
 export function Settings() {
   const { session, signOut } = useAuth()
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
+  const { weekStartsOn, setWeekStartsOn } = useSettings()
   const pick = (t: Theme) => { setTheme(t); applyTheme(t) }
 
   return (
@@ -34,7 +38,18 @@ export function Settings() {
         <button onClick={() => void signOut()} className="min-h-12 rounded-lg border border-slate-300 px-4 text-sm font-medium dark:border-slate-700">Sign out</button>
       </div>
 
-      <AreasSettings />
+      <div>
+        <h2 className={sectionTitle}>Week</h2>
+        <label className="block text-sm font-medium">Week starts on
+          <select className={`${select} mt-1`} value={weekStartsOn} onChange={(e) => void setWeekStartsOn(Number(e.target.value))}>
+            {[1, 2, 3, 4, 5, 6, 0].map((d) => <option key={d} value={d}>{['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d]}</option>)}
+          </select>
+        </label>
+        <p className="mt-1 text-xs text-slate-500">Used by “This week” windows, the week counters and Insights.</p>
+      </div>
+
+      <TagsSettings />
+      <CountersSettings />
 
       <p className="text-sm text-slate-500">Presets (phase 4), Actions (5) and Jobs (6) settings arrive in their phases.</p>
     </section>

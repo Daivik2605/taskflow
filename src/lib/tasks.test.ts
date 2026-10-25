@@ -279,7 +279,7 @@ describe('range stats and the day log', () => {
   const r = rangeStats(all, '2026-11-01', '2026-11-09', TODAY)
   it('lists what was done', () => { expect(r.done.map((t) => t.title)).toEqual(['on time', 'late', 'late deadline']) })
   it('lists missed tasks and missed deadlines separately (late ones included, sub-tasks and dropped excluded)', () => {
-    expect(r.missed.map((t) => t.title)).toEqual(['late', 'on time'].filter((x) => x === 'late').concat(['missed']).sort((a, b) => (a === 'late' ? -1 : 1)).slice(0, 2))
+    expect(r.missed.map((t) => t.title)).toEqual(['late', 'missed']) // ordered by due day
     expect(r.deadlinesMissed.map((t) => t.title)).toEqual(['missed deadline', 'late deadline'])
   })
   it('ignores tasks due outside the range', () => { expect([...r.missed, ...r.deadlinesMissed].some((t) => t.title === 'outside' || t.title === 'future')).toBe(false) })

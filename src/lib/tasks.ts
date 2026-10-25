@@ -252,7 +252,7 @@ export const VIEWS: { key: ViewKey; label: string }[] = [
   { key: 'anytime', label: 'Anytime' }, { key: 'done', label: 'Done' },
 ]
 
-export interface TaskGroup { key: string; label: string; tasks: Task[] }
+export interface TaskGroup { key: string; label: string; tasks: Task[]; reorderable: boolean }
 
 const deadlineSoon = (t: Task, today: Day) => t.hard_deadline && t.due_on !== null && t.due_on <= addDays(today, DEADLINE_HORIZON_DAYS)
 
@@ -272,8 +272,9 @@ const byDueThenOrder = (a: Task, b: Task) => (a.due_on ?? '9999').localeCompare(
 /** The tasks of one view, grouped for display. Expects the tasks already filtered by the user's tag/project/owner/label filter. */
 export function groupForView(tasks: Task[], view: ViewKey, today: Day): TaskGroup[] {
   const list = tasks.filter((t) => inView(t, view, today))
+  // `reorderable`: the group is ordered by the manual sort, so the up/down buttons mean something
   const make = (key: string, label: string, ts: Task[], cmp: (a: Task, b: Task) => number = compareTasks): TaskGroup[] =>
-    ts.length ? [{ key, label, tasks: [...ts].sort(cmp) }] : []
+    ts.length ? [{ key, label, tasks: [...ts].sort(cmp), reorderable: cmp === compareTasks }] : []
 
   switch (view) {
     case 'today':
