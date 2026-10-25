@@ -12,14 +12,14 @@ function Editor({ counter, onDone }: { counter: Counter; onDone: () => void }) {
   const { updateCounter } = useCounters()
   const { writesDisabled } = useConnection()
   const [name, setName] = useState(counter.name)
-  const [emoji, setEmoji] = useState(counter.emoji ?? '')
+  const [shortLabel, setShortLabel] = useState(counter.short_label ?? '')
   const [error, setError] = useState<string | null>(null)
-  const save = async () => { const e = await updateCounter(counter.id, { name, emoji }); setError(e); if (!e) onDone() }
+  const save = async () => { const e = await updateCounter(counter.id, { name, short_label: shortLabel }); setError(e); if (!e) onDone() }
   return (
     <div className="space-y-3 border-t border-slate-100 p-3 dark:border-slate-800">
-      <div className="grid grid-cols-[1fr_5rem] gap-3">
+      <div className="grid grid-cols-[1fr_7rem] gap-3">
         <label className={label}>Name<input className={`${input} mt-1`} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void save() }} /></label>
-        <label className={label}>Emoji<input className={`${input} mt-1 text-center`} value={emoji} onChange={(e) => setEmoji(e.target.value)} maxLength={4} aria-label="Emoji" /></label>
+        <label className={label}>Short label<input className={`${input} mt-1`} value={shortLabel} onChange={(e) => setShortLabel(e.target.value)} maxLength={8} aria-label="Short label" placeholder={name.slice(0, 4)} /></label>
       </div>
       <div><span className={label}>Colour</span><div className="mt-1"><Swatches value={counter.color} onPick={(c) => void updateCounter(counter.id, { color: c })} /></div></div>
       {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -37,7 +37,7 @@ export function CountersSettings() {
   const { writesDisabled } = useConnection()
   const [editing, setEditing] = useState<string | null>(null)
   const [name, setName] = useState('')
-  const [emoji, setEmoji] = useState('')
+  const [shortLabel, setShortLabel] = useState('')
   const [color, setColor] = useState(AREA_COLORS[3])
   const [error, setError] = useState<string | null>(null)
 
@@ -46,16 +46,16 @@ export function CountersSettings() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const err = await addCounter({ name, emoji: emoji || null, color })
+    const err = await addCounter({ name, short_label: shortLabel || null, color })
     setError(err)
-    if (!err) { setName(''); setEmoji('') }
+    if (!err) { setName(''); setShortLabel('') }
   }
 
   const row = (c: Counter, i?: number) => (
     <li key={c.id}>
       <div className="flex items-center gap-1 pl-3 pr-2">
         <button className="min-h-12 min-w-0 flex-1 text-left" onClick={() => setEditing(editing === c.id ? null : c.id)} aria-expanded={editing === c.id} aria-label={`Edit ${c.name}`}>
-          <span className="mr-2" aria-hidden="true">{c.emoji}</span><span className="font-medium">{c.name}</span>
+          <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: c.color }} aria-hidden="true" /><span className="font-medium">{c.name}</span>{c.short_label && <span className="ml-2 text-xs text-slate-500">shown as {c.short_label}</span>}
         </button>
         {i !== undefined && (
           <>
@@ -71,14 +71,14 @@ export function CountersSettings() {
   return (
     <div>
       <h2 className={sectionTitle}>Counters</h2>
-      <p className="mb-2 text-sm text-slate-500">Tap-to-count buttons on Today. Counts only — no time, no cost.</p>
+      <p className="mb-2 text-sm text-slate-500">Counter pills in the header of every screen. The short label is what the pill shows (the full name is used if it is empty). Counts only — no time, no cost.</p>
       {loading ? <p className="text-sm text-slate-500">Loading…</p> : <ul className={`${card} divide-y divide-slate-100 dark:divide-slate-800`}>{active.map((c, i) => row(c, i))}</ul>}
 
       <form onSubmit={submit} className={`${card} mt-3 space-y-3 p-3`} aria-label="Add counter">
         <h3 className="text-sm font-semibold">Add a counter</h3>
-        <div className="grid grid-cols-[1fr_5rem] gap-3">
+        <div className="grid grid-cols-[1fr_7rem] gap-3">
           <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" aria-label="New counter name" />
-          <input className={`${input} text-center`} value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="😀" maxLength={4} aria-label="New counter emoji" />
+          <input className={input} value={shortLabel} onChange={(e) => setShortLabel(e.target.value)} placeholder="Short label" maxLength={8} aria-label="New counter short label" />
         </div>
         <Swatches value={color} onPick={setColor} />
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}

@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useToday } from '../app/useToday'
 import { useCounters } from '../data/counters'
+import { counterLabel } from '../lib/counters'
 import { useSettings } from '../data/settings'
 import { useTasks } from '../data/tasks'
 import { OVERVIEW_LINKS, PERIODS, deadlineLabel, isPeriod, overview, type Period } from '../lib/overview'
@@ -74,8 +75,8 @@ export function OverviewStrip({ children }: { children?: ReactNode }) { // child
           </>
         )}
         {countersLoading ? <><Skeleton /><Skeleton /></> : o.counters.map(({ counter, total, change }) => (
-          <OverviewCard key={counter.id} label={counter.name} to={OVERVIEW_LINKS.counter(counter.id)}
-            value={<><span aria-hidden="true">{counter.emoji} </span>{total}</>}
+          <OverviewCard key={counter.id} label={counterLabel(counter)} to={OVERVIEW_LINKS.counter(counter.id)}
+            value={total}
             sub={change === 0 ? '= same as before' : <span className={change > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}>{change > 0 ? '▲' : '▼'} {Math.abs(change)}</span>}
             aria={`${counter.name} ${when}: ${total}, ${change === 0 ? 'no change' : `${change > 0 ? 'up' : 'down'} ${Math.abs(change)}`} versus the previous ${period === 'today' ? 'day' : period}`} />
         ))}

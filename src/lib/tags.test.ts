@@ -6,11 +6,12 @@ import {
   validateArchive, validateMerge, validateMove, validateTagName,
 } from './tags'
 import { reorderWithin } from './tasks'
+import { taskTagTree } from './tags'
 
 const tags: Area[] = [
-  area({ id: 'study', name: 'Study', kind: 'study', sort: 2, emoji: '📚' }),
+  area({ id: 'study', name: 'Study', kind: 'study', sort: 2 }),
   area({ id: 'work', name: 'Work', kind: 'work', sort: 0 }),
-  area({ id: 'dsa', name: 'DSA', kind: 'study', parent_id: 'study', sort: 0, emoji: '🧩' }),
+  area({ id: 'dsa', name: 'DSA', kind: 'study', parent_id: 'study', sort: 0 }),
   area({ id: 'sql', name: 'SQL', kind: 'study', parent_id: 'study', sort: 1 }),
   area({ id: 'old', name: 'Old', kind: 'study', parent_id: 'study', sort: 2, archived: true }),
   area({ id: 'tim', name: 'Tim Hortons', kind: 'work', parent_id: 'work', sort: 0 }),
@@ -26,7 +27,7 @@ describe('tag tree', () => {
     expect(buildTree(tags, { includeArchived: true }).find((n) => n.tag.id === 'study')!.children).toHaveLength(3)
   })
   it('labels and paths', () => {
-    expect(tagLabel(tags[0])).toBe('📚 Study')
+    expect(tagLabel(tags[0])).toBe('Study')
     expect(tagLabel(tags[1])).toBe('Work')
     expect(tagPath(tags, 'dsa')).toBe('Study › DSA')
     expect(tagPath(tags, 'study')).toBe('Study')
@@ -104,5 +105,36 @@ describe('picker', () => {
   it('remembers picks on this device', () => {
     rememberTag('dsa'); rememberTag('sql'); rememberTag('dsa')
     expect(getRecentTags()).toEqual(['dsa', 'sql'])
+  })
+})
+
+describe('task tag shortlist (SPEC §2b revision 4)', () => {
+  const list: Area[] = [
+    area({ id: 'study', name: 'Study', kind: 'study', sort: 0, show_for_tasks: true }),
+    area({ id: 'dsa', name: 'DSA', kind: 'study', parent_id: 'study', sort: 0 }),
+    area({ id: 'trading', name: 'Trading', kind: 'study', parent_id: 'study', sort: 1, show_for_tasks: true }),
+    area({ id: 'work', name: 'Work', kind: 'work', sort: 1 }),
+    area({ id: 'oland', name: 'Oland Stations', kind: 'work', parent_id: 'work', sort: 0, show_for_tasks: true }),
+    area({ id: 'tim', name: 'Tim Hortons', kind: 'work', parent_id: 'work', sort: 1 }),
+    area({ id: 'personal', name: 'Personal', kind: 'personal', sort: 2 }),
+    area({ id: 'gone', name: 'Gone', kind: 'work', parent_id: 'work', sort: 2, show_for_tasks: true, archived: true }),
+  ]
+  const names = (id: string | null = null) => taskTagTree(list, id).map((n) => [n.tag.name, n.children.map((c) => c.name)])
+  it('offers only flagged tags; a parent shows when it or a sub-tag is flagged', () => {
+    expect(names()).toEqual([['Study', ['Trading']], ['Work', ['Oland Stations']]])
+  })
+  it('never offers archived tags', () => { expect(names().flat(2)).not.toContain('Gone') })
+  it('keeps the task\'s current tag visible even if it is not flagged', () => {
+    expect(names('personal')).toContainEqual(['Personal', []])
+    expect(names('tim')).toContainEqual(['Work', ['Oland Stations', 'Tim Hortons']])
+  })
+  it('limits the recent list to offered tags', () => {
+    const { recent, groups } = orderForPicker(list, ['dsa', 'trading', 'personal', 'oland'], { tasksOnly: true })
+    expect(recent.map((t) => t.id)).toEqual(['trading', 'oland'])
+    expect(groups).toHaveLength(2)
+  })
+  it('the full tree is untouched when tasksOnly is off (timer, activities, Insights)', () => {
+    expect(orderForPicker(list, []).groups.map((g) => g.tag.name)).toEqual(['Study', 'Work', 'Personal'])
+    expect(orderForPicker(list, []).groups[0].children.map((c) => c.name)).toEqual(['DSA', 'Trading'])
   })
 })

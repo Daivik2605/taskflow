@@ -12,8 +12,8 @@ export interface CountersApi {
   tap: (counterId: string, opts?: { at?: Date; qty?: number; note?: string | null; id?: string }) => Promise<CounterEvent | null>
   removeEvent: (id: string) => Promise<boolean>
   editEvent: (id: string, patch: { at?: Date; qty?: number; note?: string | null }) => Promise<boolean>
-  addCounter: (input: { name: string; emoji: string | null; color: string }) => Promise<string | null>
-  updateCounter: (id: string, patch: Partial<Pick<Counter, 'name' | 'emoji' | 'color' | 'archived'>>) => Promise<string | null>
+  addCounter: (input: { name: string; short_label: string | null; color: string }) => Promise<string | null>
+  updateCounter: (id: string, patch: Partial<Pick<Counter, 'name' | 'short_label' | 'color' | 'archived'>>) => Promise<string | null>
   reorderCounters: (changes: { id: string; sort: number }[]) => Promise<boolean>
 }
 
@@ -25,7 +25,7 @@ const empty: CountersApi = {
 export const CountersContext = createContext<CountersApi>(empty)
 export const useCounters = () => useContext(CountersContext)
 
-const COUNTER_COLUMNS = 'id,name,emoji,color,sort,archived'
+const COUNTER_COLUMNS = 'id,name,short_label,color,sort,archived'
 const EVENT_COLUMNS = 'id,counter_id,at,day,qty,note'
 
 export function CountersProvider({ children }: { children: ReactNode }) {
@@ -116,11 +116,11 @@ export function CountersProvider({ children }: { children: ReactNode }) {
     return true
   }, [offline, setEvents, toast])
 
-  const addCounter = useCallback<CountersApi['addCounter']>(async ({ name, emoji, color }) => {
+  const addCounter = useCallback<CountersApi['addCounter']>(async ({ name, short_label, color }) => {
     if (writesOff.current) { offline(); return 'Changes are turned off while offline.' }
     const problem = validateCounterName(name, cRef.current)
     if (problem) return problem
-    const { data, error } = await db().from('taskflow_counters').insert({ name: name.trim(), emoji: emoji || null, color, sort: nextCounterSort(cRef.current) }).select(COUNTER_COLUMNS).single()
+    const { data, error } = await db().from('taskflow_counters').insert({ name: name.trim(), short_label: short_label?.trim() || null, color, sort: nextCounterSort(cRef.current) }).select(COUNTER_COLUMNS).single()
     if (error) return error.code === '23505' ? 'A counter with that name already exists.' : friendlyDbError(error)
     setCounters((l) => [...l, data as Counter])
     return null
@@ -136,7 +136,7 @@ export function CountersProvider({ children }: { children: ReactNode }) {
       if (problem) return problem
       body = { ...body, name: body.name.trim() }
     }
-    if (body.emoji !== undefined) body = { ...body, emoji: body.emoji || null }
+    if (body.short_label !== undefined) body = { ...body, short_label: body.short_label?.trim() || null }
     setCounters((l) => l.map((c) => (c.id === id ? { ...c, ...body } : c)))
     const { error } = await db().from('taskflow_counters').update(body).eq('id', id)
     if (error) { setCounters((l) => l.map((c) => (c.id === id ? prev : c))); return error.code === '23505' ? 'A counter with that name already exists.' : friendlyDbError(error) }

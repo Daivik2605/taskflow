@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { COUNTER_SEEDS, JOB_SEEDS, PRESET_SEEDS, PROJECT_SEED, TAG_SEEDS, buildActions } from './seed'
 
-export interface TagRow { name: string; kind: string; color: string; emoji: string; sort: number; app_key: string | null; parent_id: string | null }
+export interface TagRow { name: string; kind: string; color: string; show_for_tasks: boolean; sort: number; app_key: string | null; parent_id: string | null }
 
 /** The few operations seeding needs. Kept small so the "exactly once" logic is testable without Supabase. */
 export interface SeedDb {
@@ -12,7 +12,7 @@ export interface SeedDb {
   upsertPresets(rows: { name: string; area_id: string; default_minutes: number; sort: number }[]): Promise<{ id: string; name: string }[]>
   upsertProject(row: { name: string; area_id: string; status: string }): Promise<void>
   upsertJobs(rows: { employer: string; area_id: string }[]): Promise<{ id: string; employer: string }[]>
-  upsertCounters(rows: { name: string; emoji: string; color: string; sort: number }[]): Promise<void>
+  upsertCounters(rows: { name: string; short_label: string; color: string; sort: number }[]): Promise<void>
   upsertActions(rows: { key: string; label: string; sort: number }[]): Promise<void>
   markSeeded(): Promise<void>
 }
@@ -26,14 +26,14 @@ export async function runSeed(db: SeedDb): Promise<boolean> {
   await db.ensureSettings()
 
   const parents = await db.upsertTags(TAG_SEEDS.map((t, i) => ({
-    name: t.name, kind: t.kind, color: t.color, emoji: t.emoji, sort: i, app_key: null, parent_id: null })))
+    name: t.name, kind: t.kind, color: t.color, show_for_tasks: t.show_for_tasks, sort: i, app_key: null, parent_id: null })))
   const parentId = (name: string) => {
     const p = parents.find((x) => x.name === name && x.parent_id === null)
     if (!p) throw new Error(`Seed tag missing: ${name}`)
     return p.id
   }
   const all = await db.upsertTags(TAG_SEEDS.flatMap((t) => t.children.map((c, i) => ({
-    name: c.name, kind: t.kind, color: c.color, emoji: c.emoji, sort: i, app_key: c.app_key, parent_id: parentId(t.name) }))))
+    name: c.name, kind: t.kind, color: c.color, show_for_tasks: c.show_for_tasks, sort: i, app_key: c.app_key, parent_id: parentId(t.name) }))))
   const tagId = (path: string) => {
     const [parent, name] = path.split('/')
     const pid = parentId(parent)

@@ -810,3 +810,122 @@ begin
     end loop;
   end if;
 end $$;
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════════
+-- Revision 4 (phase 2.7): counter short labels, activities (presets + weekly target), task tag shortlist.
+-- Idempotent: safe to re-run. Nothing is dropped. Emoji columns stay in the database but the app no longer reads or writes them.
+-- ═════════════════════════════════════════════════════════════════════════════════════════════
+
+alter table public.taskflow_counters add column if not exists short_label text;
+update public.taskflow_counters set short_label = 'Cig'  where name = 'Cigarette' and short_label is null;
+update public.taskflow_counters set short_label = 'Weed' where name = 'Weed'      and short_label is null;
+
+alter table public.taskflow_presets add column if not exists weekly_target int;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'taskflow_presets_weekly_target_positive') then
+    alter table public.taskflow_presets add constraint taskflow_presets_weekly_target_positive
+      check (weekly_target is null or weekly_target > 0);
+  end if;
+end $$;
+
+-- Task tag shortlist. The first run (the column does not exist yet) adds Hustle / Projects, flags the six task tags and adds the
+-- Home Workout and Gym activities. Later runs skip all of it, so a tag you un-flag in Settings → Tags stays un-flagged.
+do $$
+declare
+  u uuid; p_hustle uuid; p_wellness uuid; proj uuid; area uuid; pid uuid; next_sort int; act_sort int;
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'taskflow_areas' and column_name = 'show_for_tasks') then
+    return;
+  end if;
+
+  alter table public.taskflow_areas add column show_for_tasks boolean not null default false;
+
+  for u in select distinct user_id from public.taskflow_areas loop
+    select id into p_hustle   from public.taskflow_areas where user_id = u and parent_id is null and name = 'Hustle';
+    select id into p_wellness from public.taskflow_areas where user_id = u and parent_id is null and name = 'Wellness';
+
+    if p_hustle is not null then
+      select id into proj from public.taskflow_areas where user_id = u and parent_id = p_hustle and name = 'Projects';
+      if proj is null then
+        insert into public.taskflow_areas (user_id, name, parent_id, kind, color, sort)
+        values (u, 'Projects', p_hustle, 'hustle', '#8b5cf6',
+                (select coalesce(max(sort), -1) + 1 from public.taskflow_areas where user_id = u and parent_id = p_hustle));
+      end if;
+    end if;
+
+    update public.taskflow_areas a set show_for_tasks = true
+     where a.user_id = u and (
+       (a.parent_id is null and a.name = 'Study')
+       or (a.name in ('Oland Stations', 'Commute') and a.parent_id in (select id from public.taskflow_areas where user_id = u and parent_id is null and name = 'Work'))
+       or (a.name in ('AEO Studio', 'Projects')    and a.parent_id = p_hustle)
+       or (a.name = 'Trading'                      and a.parent_id in (select id from public.taskflow_areas where user_id = u and parent_id is null and name = 'Study')));
+
+    -- activities: the four from SPEC §16 (existing presets keep their ids and minutes)
+    if p_wellness is not null then
+      select coalesce(max(sort), -1) + 1 into next_sort from public.taskflow_presets where user_id = u;
+      for area in
+        select a.id from public.taskflow_areas a
+         where a.user_id = u and a.parent_id = p_wellness and a.name in ('Home Workout', 'Gym') order by a.sort
+      loop
+        pid := null;
+        insert into public.taskflow_presets (user_id, name, area_id, default_minutes, sort)
+        select u, a.name, a.id, case a.name when 'Gym' then 60 else 30 end, next_sort
+          from public.taskflow_areas a where a.id = area
+        on conflict (user_id, name) do nothing
+        returning id into pid;
+        if pid is not null then
+          next_sort := next_sort + 1;
+          -- the matching action button goes right before "Sleep check-in", like the first two activities have
+          select sort into act_sort from public.taskflow_actions where user_id = u and key = 'sleep_checkin';
+          if act_sort is null then
+            select coalesce(max(sort), -1) + 1 into act_sort from public.taskflow_actions where user_id = u;
+          else
+            update public.taskflow_actions set sort = sort + 1 where user_id = u and sort >= act_sort;
+          end if;
+          insert into public.taskflow_actions (user_id, key, label, sort)
+          select u, 'preset:' || pid::text, pr.name, act_sort from public.taskflow_presets pr where pr.id = pid
+          on conflict (user_id, key) do nothing;
+        end if;
+      end loop;
+    end if;
+  end loop;
+end $$;
+
+-- Log one activity-button tap (or a back-dated one) as a stopped session with one segment, ending at p_ended_at.
+-- The client supplies p_id, so a retry (flaky network, the offline queue replaying) returns the same id and never duplicates.
+-- security invoker: row-level security applies, so it can only ever read or write the caller's own rows.
+create or replace function public.taskflow_log_activity(p_id uuid, p_preset uuid, p_minutes int, p_ended_at timestamptz default now())
+returns uuid
+language plpgsql security invoker set search_path = public as $$
+declare pr public.taskflow_presets; started timestamptz;
+begin
+  if p_id is null then raise exception 'An id is required'; end if;
+  if p_minutes is null or p_minutes < 1 or p_minutes > 1440 then raise exception 'Minutes must be between 1 and 1440'; end if;
+  if p_ended_at > now() + interval '1 minute' then raise exception 'That time is in the future'; end if;
+
+  if exists (select 1 from public.taskflow_sessions where id = p_id) then return p_id; end if;   -- already logged: retry is a no-op
+
+  select * into pr from public.taskflow_presets where id = p_preset;
+  if not found then raise exception 'Activity not found'; end if;
+
+  started := p_ended_at - make_interval(mins => p_minutes);
+  insert into public.taskflow_sessions (id, area_id, source, preset_id, started_at, ended_at, state)
+  values (p_id, pr.area_id, 'preset', pr.id, started, p_ended_at, 'stopped');
+  insert into public.taskflow_session_segments (session_id, started_at, ended_at)
+  values (p_id, started, p_ended_at);
+  return p_id;
+exception when unique_violation then
+  return p_id;   -- two retries raced; the other one won
+end $$;
+revoke all on function public.taskflow_log_activity(uuid, uuid, int, timestamptz) from public;
+grant execute on function public.taskflow_log_activity(uuid, uuid, int, timestamptz) to authenticated;
+
+-- Realtime: activity logs appear on the other device
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'taskflow_presets') then
+    alter publication supabase_realtime add table public.taskflow_presets;
+  end if;
+end $$;

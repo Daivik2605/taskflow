@@ -30,6 +30,11 @@ echo "→ schema run 2"; psql_db fresh -f "$SCHEMA"
 echo "→ assertions";   psql_db fresh -t -f assertions.sql | grep -E "PASSED" || true
 echo "→ behaviours";   psql_db fresh -t -f behaviours.sql | grep -E "PASSED"
 echo "→ schema run 3 (over data)"; psql_db fresh -f "$SCHEMA"
+echo "→ re-running keeps a tag you un-flagged for tasks"
+psql_db fresh -c "update taskflow_areas set show_for_tasks = true where name = 'Study' and parent_id is null"
+psql_db fresh -c "update taskflow_areas set show_for_tasks = false where name = 'Study' and parent_id is null"
+psql_db fresh -f "$SCHEMA"
+[ "$(psql_db fresh -t -A -c "select count(*) from taskflow_areas where name = 'Study' and parent_id is null and show_for_tasks")" = "0" ] || { echo "re-running the schema re-flagged a tag"; exit 1; }
 rows=$(psql_db fresh -t -A -c "select (select count(*) from taskflow_tasks) + (select count(*) from taskflow_areas) + (select count(*) from taskflow_sleep)")
 [ "$rows" -gt 0 ] || { echo "data was lost by re-running the schema"; exit 1; }
 

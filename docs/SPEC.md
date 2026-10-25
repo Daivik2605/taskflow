@@ -194,7 +194,7 @@ Sessions, shifts, naps and resets that cross midnight are split across Toronto d
 - All views `security_invoker`, granted to `authenticated`, append-only after release.
 
 ## 13. Counters (cigarettes, weed — replaces the planned Smoke app; revision 4: header pills)
-- **Small counter pills in the top-left corner of every screen** (header, phone and desktop): `Cig 3` · `Weed 1` (today's count; amber/red against a limit once goals exist). One tap = +1 now with a 5-second **Undo** toast. Long-press (or a small chevron) = add at a past time, or open today's taps to edit/delete, and "last: 2h 10m ago". No big buttons on Today.
+- **Small counter pills in the top-left corner of every screen** (header, phone and desktop): `Cig 3` · `Weed 1` (each counter has a `short_label`, editable in Settings → Counters; empty falls back to the full name) (today's count; amber/red against a limit once goals exist). One tap = +1 now with a 5-second **Undo** toast. Long-press (or a small chevron) = add at a past time, or open today's taps to edit/delete, and "last: 2h 10m ago". No big buttons on Today.
 - **No time tracking, no cost** — counts only. Generic so more counters can be added in Settings → Counters.
 - **Stats** (Insights → Counters, and a tap on a counter): today, this week, this month, all time; per-day bars (last 30 days), per-week (last 12), per-month (last 12); 7- and 30-day daily average; days since last; zero days this month.
 - Realtime, so a tap on the phone shows on the Mac.
@@ -207,7 +207,7 @@ Sessions, shifts, naps and resets that cross midnight are split across Toronto d
 ## 16. Activity buttons (revision 4 — replaces scheduled routines)
 Things I do repeatedly and would never add as a task first (Kriya, Padmasadna, Home Workout, Gym, …) are **buttons**, not tasks.
 - An **Activity** = name, tag (e.g. Wellness / Gym), default minutes, optional weekly target ("3 per week"), sort, archived. Edited in **Settings → Activities** (add, rename, change tag/minutes/target, reorder, hide). Seeded: Kriya 35 min, Padmasadna 20 min, Home Workout 30 min, Gym 60 min (all Wellness sub-tags); targets empty until I set them.
-- **Activity buttons** sit on Today under the overview: one tap = done now → a stopped timer session on its tag, `default_minutes` long, ending now (`source = 'preset'`, so the time counts in Insights). Undo toast. The button shows done today (check) and "2 this week" (or "2/3 this week" with a target).
+- **Activity buttons** sit on Today under the overview (a tap calls `taskflow_log_activity`, which takes a client-supplied id so a retry or an offline replay can never log twice): one tap = done now → a stopped timer session on its tag, `default_minutes` long, ending now (`source = 'preset'`, so the time counts in Insights). Undo toast. The button shows done today (check) and "2 this week" (or "2/3 this week" with a target).
 - **Long-press / "…"**: log with different minutes, log at an earlier time or another day, see and delete this week's logs. (After phase 4: also "start timer instead".)
 - No schedules, nothing generated, nothing ever "missed". If I skip Gym, nothing happens.
 - Activities **are** the presets from §4 (same table `taskflow_presets`, gaining `weekly_target`): there is one list, not two.

@@ -3,7 +3,10 @@
 
 import { addDays, addMonths, dayOf, diffDays, formatDay, formatDuration, formatMonth, monthBounds, weekBounds, type Day, type Instant } from './time'
 
-export interface Counter { id: string; name: string; emoji: string | null; color: string; sort: number; archived: boolean }
+export interface Counter { id: string; name: string; short_label: string | null; color: string; sort: number; archived: boolean }
+
+/** What the header pills and tight spaces show: the short label, or the full name when there is none. */
+export const counterLabel = (c: Pick<Counter, 'name' | 'short_label'>) => c.short_label?.trim() || c.name
 export interface CounterEvent { id: string; counter_id: string; at: string; day: Day; qty: number; note: string | null }
 
 export const byCounterSort = (a: Counter, b: Counter) => a.sort - b.sort || a.name.localeCompare(b.name)

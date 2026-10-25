@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { ToastProvider } from '../app/toast'
 import { TaskSheetProvider } from '../components/TaskSheet'
+import { ActivitiesProvider } from './activities'
 import { AreasProvider } from './areas'
 import { CountersProvider } from './counters'
 import { ProjectsProvider } from './projects'
@@ -15,9 +16,11 @@ export function DataProviders({ children }: { children: ReactNode }) {
         <AreasProvider>
           <ProjectsProvider>
             <CountersProvider>
-              <TasksProvider>
-                <TaskSheetProvider>{children}</TaskSheetProvider>
-              </TasksProvider>
+              <ActivitiesProvider>
+                <TasksProvider>
+                  <TaskSheetProvider>{children}</TaskSheetProvider>
+                </TasksProvider>
+              </ActivitiesProvider>
             </CountersProvider>
           </ProjectsProvider>
         </AreasProvider>

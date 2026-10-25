@@ -149,4 +149,58 @@ do $$ declare msg text; begin
 end $$;
 reset role;
 
+-- ── activities (phase 2.7): taskflow_log_activity is idempotent on the client id, atomic, and per-user ──
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'x', false) \g /dev/null
+do $$ declare tag uuid; pr uuid; sid uuid := gen_random_uuid(); r uuid; n int; s record; msg text; ended timestamptz := date_trunc('minute', now()) - interval '2 hours'; begin
+  insert into taskflow_areas (name, kind) values ('ActTag', 'wellness') returning id into tag;
+  insert into taskflow_presets (name, area_id, default_minutes, weekly_target) values ('ActGym', tag, 60, 3) returning id into pr;
+  begin insert into taskflow_presets (name, area_id, default_minutes, weekly_target) values ('ActBad', tag, 10, 0); raise exception 'zero weekly target allowed';
+  exception when check_violation then null; end;
+  insert into taskflow_counters (name, short_label) values ('Alcohol', 'Alc');
+  if (select short_label from taskflow_counters where name = 'Alcohol') <> 'Alc' then raise exception 'short_label not stored'; end if;
+
+  r := taskflow_log_activity(sid, pr, 45, ended);
+  if r <> sid then raise exception 'the function must return the client id'; end if;
+  r := taskflow_log_activity(sid, pr, 45, ended);                 -- a retry
+  r := taskflow_log_activity(sid, pr, 45, ended);
+  select count(*) into n from taskflow_sessions where id = sid;
+  if n <> 1 then raise exception 'a retry duplicated the session (%)', n; end if;
+  select count(*) into n from taskflow_session_segments where session_id = sid;
+  if n <> 1 then raise exception 'a retry duplicated the segment (%)', n; end if;
+  select * into s from taskflow_sessions where id = sid;
+  if s.state <> 'stopped' or s.source <> 'preset' or s.preset_id <> pr or s.area_id <> tag then raise exception 'wrong session row: %', s; end if;
+  if s.ended_at <> ended or s.started_at <> ended - interval '45 minutes' then raise exception 'wrong times: % → %', s.started_at, s.ended_at; end if;
+  if (select started_at || ended_at::text from taskflow_session_segments where session_id = sid) is distinct from (s.started_at || s.ended_at::text) then raise exception 'segment does not match its session'; end if;
+
+  begin perform taskflow_log_activity(gen_random_uuid(), pr, 0); raise exception 'zero minutes allowed';
+  exception when others then get stacked diagnostics msg = message_text; if msg !~ 'Minutes' then raise; end if; end;
+  begin perform taskflow_log_activity(gen_random_uuid(), pr, 30, now() + interval '2 hours'); raise exception 'future log allowed';
+  exception when others then get stacked diagnostics msg = message_text; if msg !~ 'future' then raise; end if; end;
+  begin perform taskflow_log_activity(gen_random_uuid(), gen_random_uuid(), 30); raise exception 'unknown activity allowed';
+  exception when others then get stacked diagnostics msg = message_text; if msg !~ 'not found' then raise; end if; end;
+
+  delete from taskflow_sessions where id = sid;                                      -- Undo: the segment goes with it
+  select count(*) into n from taskflow_session_segments where session_id = sid;
+  if n <> 0 then raise exception 'deleting the session left its segment'; end if;
+  perform set_config('tf.act_preset', pr::text, false);
+  perform set_config('tf.act_session', taskflow_log_activity(gen_random_uuid(), pr, 20)::text, false);
+end $$;
+select set_config('request.jwt.claim.sub', :'y', false) \g /dev/null
+do $$ declare msg text; n int; begin
+  begin perform taskflow_log_activity(gen_random_uuid(), current_setting('tf.act_preset')::uuid, 20); raise exception 'user y logged on user x''s activity';
+  exception when others then get stacked diagnostics msg = message_text; if msg !~ 'not found' then raise; end if; end;
+  -- replaying x's session id as y must neither reveal nor overwrite it
+  begin perform taskflow_log_activity(current_setting('tf.act_session')::uuid, current_setting('tf.act_preset')::uuid, 20); raise exception 'user y replayed x''s id';
+  exception when others then get stacked diagnostics msg = message_text; if msg !~ 'not found' then raise; end if; end;
+  select count(*) into n from taskflow_sessions where source = 'preset';
+  if n <> 0 then raise exception 'user y can see user x''s activity sessions'; end if;
+end $$;
+reset role;
+do $$ begin
+  if (select prosecdef from pg_proc where proname = 'taskflow_log_activity') then raise exception 'taskflow_log_activity must be security invoker'; end if;
+  if has_function_privilege('anon', 'public.taskflow_log_activity(uuid,uuid,int,timestamptz)', 'execute') then raise exception 'anon can execute taskflow_log_activity'; end if;
+  if not has_function_privilege('authenticated', 'public.taskflow_log_activity(uuid,uuid,int,timestamptz)', 'execute') then raise exception 'authenticated cannot execute taskflow_log_activity'; end if;
+end $$;
+
 select 'BEHAVIOURS PASSED' as result;

@@ -142,7 +142,7 @@ function TaskForm({ task, onClose, onOpen }: { task: Task; onClose: () => void; 
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className={label}><span className="mb-1 block">Tag</span><TagPicker value={areaId} onChange={setAreaId} allowNone /></div>
+        <div className={label}><span className="mb-1 block">Tag</span><TagPicker value={areaId} onChange={setAreaId} allowNone tasksOnly /></div>
         <label className={label}>Project
           <select className={`${select} mt-1`} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
             <option value="">No project</option>

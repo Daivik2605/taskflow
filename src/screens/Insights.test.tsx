@@ -1,7 +1,8 @@
 import { fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CounterEvent } from '../lib/counters'
-import { makeDone, makeTask, renderApp } from '../test-utils'
+import { buildLog } from '../lib/activities'
+import { ACTIVITIES, makeDone, makeTask, renderApp } from '../test-utils'
 import Insights from './Insights'
 
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-10T15:00:00Z')) }) // Tue 10 Nov 10:00 Toronto
@@ -28,22 +29,22 @@ describe('Insights → Day', () => {
     const log = within(screen.getByRole('list', { name: 'Log' }))
     const lines = log.getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ''))
     expect(lines).toEqual([
-      '8:00am🚬Cigarette', // 13:00Z
-      '9:00am✓PassG2Late🏠Personal', // 14:00Z — finished a day after its due date, so it says Late
-      '9:30am🚬Cigarette×2', // 14:30Z
-      '11:00am🌿Weed', // 16:00Z
+      '8:00amCigarette', // 13:00Z
+      '9:00am✓PassG2LatePersonal', // 14:00Z — finished a day after its due date, so it says Late
+      '9:30amCigarette×2', // 14:30Z
+      '11:00amWeed', // 16:00Z
     ])
   })
   it('summarises tasks done and counter totals for the day', () => {
     show()
-    expect(screen.getByText(/1 task done · 🚬 3 · 🌿 1/)).toBeInTheDocument()
+    expect(screen.getByText(/1 task done · Cig 3 · Weed 1/)).toBeInTheDocument()
   })
   it('steps back a day, and cannot go past today', () => {
     show()
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Previous' }))
     expect(screen.getByText('Mon 9 Nov')).toBeInTheDocument()
-    expect(screen.getByText(/1 task done · 🚬 1/)).toBeInTheDocument()
+    expect(screen.getByText(/1 task done · Cig 1/)).toBeInTheDocument()
     expect(screen.getByText('Yesterday task')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
   })
@@ -128,5 +129,37 @@ describe('Insights → Counters', () => {
   it('the chart description carries the numbers (so it is readable without seeing it)', () => {
     show('/insights?tab=counters')
     expect(screen.getByRole('img', { name: /^Per day · last 30 days.*Tue 10 Nov 3/ })).toBeInTheDocument()
+  })
+})
+
+describe('Insights → activities', () => {
+  // Kriya 35 min (tag Study) ended today 9:00 Toronto; Gym 60 min (tag Work) ended yesterday 18:00 and last week
+  const logs = [
+    buildLog({ id: 'act-kriya', area_id: 'a-study' }, 35, '2026-11-10T14:00:00Z', 'l1'),
+    buildLog({ id: 'act-gym', area_id: 'a-work' }, 60, '2026-11-09T23:00:00Z', 'l2'),
+    buildLog({ id: 'act-gym', area_id: 'a-work' }, 60, '2026-11-02T23:00:00Z', 'l3'),
+  ]
+  const run = (route = '/insights') => renderApp(<Insights />, { tasks, events, activities: ACTIVITIES, logs, route })
+
+  it('the Day log shows an activity with its minutes and tag, in time order', () => {
+    run()
+    const lines = within(screen.getByRole('list', { name: 'Log' })).getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ''))
+    expect(lines).toContain('9:00amKriya·35minStudy')
+    expect(lines.indexOf('9:00amKriya·35minStudy')).toBeLessThan(lines.indexOf('9:30amCigarette×2'))
+  })
+  it('the Day summary adds the activity time', () => {
+    run()
+    expect(screen.getByText(/1 task done · 35m of activities/)).toBeInTheDocument()
+  })
+  it('Range shows time by tag for the week: parent total and sub-tag lines', () => {
+    run('/insights?tab=range&range=week')
+    const list = within(screen.getByRole('list', { name: 'Time by tag' }))
+    const rows = list.getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ' ').trim())
+    expect(rows).toEqual(['Study35m', 'Work1h 00m'])
+    expect(rows.join('|')).not.toMatch(/2h/) // last week's Gym is outside this week
+  })
+  it('Range says so when nothing was logged', () => {
+    renderApp(<Insights />, { tasks, events, route: '/insights?tab=range&range=week' })
+    expect(screen.getByText('No time logged in this range.')).toBeInTheDocument()
   })
 })

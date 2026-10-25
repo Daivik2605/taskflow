@@ -9,7 +9,7 @@ export interface Area {
   kind: TagKind
   app_key: string | null
   color: string
-  emoji: string | null
+  show_for_tasks: boolean // offered in the task sheet and quick add (SPEC §2b); the timer and Insights always see the full tree
   sort: number
   archived: boolean
   parent_id: string | null
@@ -27,15 +27,7 @@ export const TAG_KINDS: { value: TagKind; label: string; hint: string }[] = [
 
 export const AREA_COLORS = ['#6366f1', '#3b82f6', '#0ea5e9', '#14b8a6', '#10b981', '#22c55e', '#f59e0b', '#f97316', '#ef4444', '#ec4899', '#8b5cf6', '#64748b']
 
-export const DEFAULT_QUICK_ADD_TAG = 'Personal'
-
 export const byAreaSort = (a: Area, b: Area) => a.sort - b.sort || a.name.localeCompare(b.name)
 export const activeAreas = (areas: Area[]) => areas.filter((a) => !a.archived).sort(byAreaSort)
-
-/** Quick add defaults to the Personal tag; falls back to the first active top-level tag if it was renamed or archived. */
-export function defaultAreaId(areas: Area[]): string | null {
-  const tops = activeAreas(areas).filter((a) => a.parent_id === null)
-  return (tops.find((a) => a.name === DEFAULT_QUICK_ADD_TAG) ?? tops[0])?.id ?? null
-}
 
 export const isHexColor = (c: string) => /^#[0-9a-fA-F]{6}$/.test(c)

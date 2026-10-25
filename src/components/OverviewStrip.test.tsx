@@ -2,7 +2,7 @@ import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CounterButtons } from './CounterButtons'
+import { CounterPills } from './CounterPills'
 import { CountersContext } from '../data/counters'
 import { COUNTERS, fakeCountersApi, fakeTasksApi, makeDone, makeTask, renderApp } from '../test-utils'
 import type { CounterEvent } from '../lib/counters'
@@ -72,7 +72,7 @@ describe('OverviewStrip', () => {
       const api = fakeCountersApi(COUNTERS, events, {
         tap: vi.fn(async (_id: string, o?: { id?: string }) => { const e = { ...ev('2026-11-10'), id: o?.id ?? 'x' }; setEvents((p) => [...p, e]); return e }),
       })
-      return <CountersContext.Provider value={api}><OverviewStrip /><CounterButtons /></CountersContext.Provider>
+      return <CountersContext.Provider value={api}><OverviewStrip /><CounterPills /></CountersContext.Provider>
     }
     renderApp(<Harness />, { tasks: [] })
     expect(card(/^Cigarette today: 0, down 2/)).toBeInTheDocument()

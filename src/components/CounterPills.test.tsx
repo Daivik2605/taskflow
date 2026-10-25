@@ -2,7 +2,7 @@ import { act, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CounterEvent } from '../lib/counters'
 import { fakeCountersApi, polyfillDialog, renderApp } from '../test-utils'
-import { CounterButtons } from './CounterButtons'
+import { CounterPills } from './CounterPills'
 
 beforeAll(polyfillDialog)
 // 2026-11-10 10:00 Toronto (EST) = 15:00Z
@@ -18,27 +18,41 @@ const events = [
 ]
 const btn = (name: RegExp) => screen.getByRole('button', { name })
 
-describe('counter buttons', () => {
-  it("show today's count and how long ago the last tap was", () => {
-    renderApp(<CounterButtons />, { events })
-    expect(btn(/^Cigarette: 2 today/)).toHaveTextContent('2')
-    expect(btn(/^Cigarette: 2 today/)).toHaveTextContent('last: 1h 00m ago')
-    expect(btn(/^Weed: 0 today/)).toHaveTextContent('last: 1 day ago')
+describe('counter pills', () => {
+  it("show the short label and today's count", () => {
+    renderApp(<CounterPills />, { events })
+    expect(btn(/^Cigarette: 2 today/)).toHaveTextContent(/^Cig\s*2$/)
+    expect(btn(/^Weed: 0 today/)).toHaveTextContent(/^Weed\s*0$/)
   })
-  it('say "none yet" for a counter that was never tapped', () => {
-    renderApp(<CounterButtons />, { events: [] })
-    expect(btn(/^Weed: 0 today/)).toHaveTextContent('none yet')
+  it('fall back to the full name when a counter has no short label', () => {
+    renderApp(<CounterPills />, { counters: [{ id: 'c1', name: 'Alcohol', short_label: null, color: '#000000', sort: 0, archived: false }, { id: 'c2', name: 'Coffee', short_label: '  ', color: '#000000', sort: 1, archived: false }] })
+    expect(btn(/^Alcohol: 0 today/)).toHaveTextContent(/^Alcohol\s*0$/)
+    expect(btn(/^Coffee: 0 today/)).toHaveTextContent(/^Coffee\s*0$/)
+  })
+  it('tell how long ago the last tap was in the sheet', () => {
+    renderApp(<CounterPills />, { events })
+    fireEvent.click(screen.getByRole('button', { name: /More for Cigarette/ }))
+    expect(within(screen.getByRole('dialog', { name: 'Cigarette taps' })).getByText('last: 1h 00m ago')).toBeInTheDocument()
+  })
+  it('say "none yet" in the sheet for a counter that was never tapped', () => {
+    renderApp(<CounterPills />, { events: [] })
+    fireEvent.click(screen.getByRole('button', { name: /More for Weed/ }))
+    expect(within(screen.getByRole('dialog', { name: 'Weed taps' })).getByText('none yet')).toBeInTheDocument()
+  })
+  it('have no emoji', () => {
+    const { container } = renderApp(<CounterPills />, { events })
+    expect(container.textContent).not.toMatch(/\p{Extended_Pictographic}/u)
   })
   it('one tap records +1 now, and offers Undo', async () => {
-    const { countersApi } = renderApp(<CounterButtons />, { events })
+    const { countersApi } = renderApp(<CounterPills />, { events })
     fireEvent.click(btn(/^Cigarette/))
     expect(countersApi.tap).toHaveBeenCalledTimes(1)
     expect(countersApi.tap).toHaveBeenCalledWith('c-cig', { id: expect.any(String) })
-    expect(screen.getByRole('status')).toHaveTextContent('🚬 Cigarette +1')
+    expect(screen.getByRole('status')).toHaveTextContent('Cig +1')
     expect(within(screen.getByRole('status')).getByRole('button', { name: 'Undo' })).toBeInTheDocument()
   })
   it('Undo removes that exact tap and the toast goes away', () => {
-    const { countersApi } = renderApp(<CounterButtons />, { events })
+    const { countersApi } = renderApp(<CounterPills />, { events })
     fireEvent.click(btn(/^Cigarette/))
     const id = (countersApi.tap as ReturnType<typeof vi.fn>).mock.calls[0][1].id
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
@@ -46,7 +60,7 @@ describe('counter buttons', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
   it('the Undo offer lasts 5 seconds', () => {
-    renderApp(<CounterButtons />, { events })
+    renderApp(<CounterPills />, { events })
     fireEvent.click(btn(/^Weed/))
     act(() => { vi.advanceTimersByTime(4900) })
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
@@ -54,7 +68,7 @@ describe('counter buttons', () => {
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
   })
   it('two quick taps are two events', () => {
-    const { countersApi } = renderApp(<CounterButtons />, { events })
+    const { countersApi } = renderApp(<CounterPills />, { events })
     fireEvent.click(btn(/^Cigarette/)); fireEvent.click(btn(/^Cigarette/))
     expect(countersApi.tap).toHaveBeenCalledTimes(2)
     const ids = (countersApi.tap as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1].id)
@@ -63,7 +77,7 @@ describe('counter buttons', () => {
 
   describe('long-press and "…"', () => {
     it('holding a button for half a second opens the sheet instead of tapping', () => {
-      const { countersApi } = renderApp(<CounterButtons />, { events })
+      const { countersApi } = renderApp(<CounterPills />, { events })
       const b = btn(/^Cigarette/)
       fireEvent.pointerDown(b)
       act(() => { vi.advanceTimersByTime(520) })
@@ -73,7 +87,7 @@ describe('counter buttons', () => {
       expect(countersApi.tap).not.toHaveBeenCalled()
     })
     it('a short press is a normal tap', () => {
-      const { countersApi } = renderApp(<CounterButtons />, { events })
+      const { countersApi } = renderApp(<CounterPills />, { events })
       const b = btn(/^Cigarette/)
       fireEvent.pointerDown(b)
       act(() => { vi.advanceTimersByTime(200) })
@@ -83,7 +97,7 @@ describe('counter buttons', () => {
       expect(document.querySelectorAll('dialog[open]')).toHaveLength(0)
     })
     it('moving off the button cancels the hold', () => {
-      renderApp(<CounterButtons />, { events })
+      renderApp(<CounterPills />, { events })
       const b = btn(/^Cigarette/)
       fireEvent.pointerDown(b)
       fireEvent.pointerLeave(b)
@@ -91,7 +105,7 @@ describe('counter buttons', () => {
       expect(document.querySelectorAll('dialog[open]')).toHaveLength(0)
     })
     it('the … button opens the same sheet', () => {
-      renderApp(<CounterButtons />, { events })
+      renderApp(<CounterPills />, { events })
       fireEvent.click(screen.getByRole('button', { name: /More for Weed/ }))
       expect(screen.getByRole('dialog', { name: 'Weed taps' })).toHaveAttribute('open')
     })
@@ -101,7 +115,7 @@ describe('counter buttons', () => {
     const openSheet = () => { fireEvent.click(screen.getByRole('button', { name: /More for Cigarette/ })); return within(screen.getByRole('dialog', { name: 'Cigarette taps' })) }
 
     it("lists today's taps newest first, in Toronto time", () => {
-      renderApp(<CounterButtons />, { events })
+      renderApp(<CounterPills />, { events })
       const sheet = openSheet()
       const items = sheet.getAllByRole('listitem').map((li) => li.textContent)
       expect(items[0]).toMatch(/^9:00 am/) // 14:00Z
@@ -109,7 +123,7 @@ describe('counter buttons', () => {
       expect(sheet.getByText(/Today's taps · 2/)).toBeInTheDocument()
     })
     it('adds a tap at a past time, read as Toronto time (not the browser zone)', async () => {
-      const { countersApi } = renderApp(<CounterButtons />, { events })
+      const { countersApi } = renderApp(<CounterPills />, { events })
       const sheet = openSheet()
       fireEvent.change(sheet.getByLabelText('When (Toronto time)'), { target: { value: '2026-11-10T08:15' } })
       fireEvent.change(sheet.getByLabelText('How many'), { target: { value: '2' } })
@@ -118,7 +132,7 @@ describe('counter buttons', () => {
       expect(countersApi.tap).toHaveBeenCalledWith('c-cig', { at: new Date('2026-11-10T13:15:00Z'), qty: 2, note: 'after breakfast' }) // 08:15 EST
     })
     it('refuses a time in the future and a bad quantity', () => {
-      const { countersApi } = renderApp(<CounterButtons />, { events })
+      const { countersApi } = renderApp(<CounterPills />, { events })
       const sheet = openSheet()
       fireEvent.change(sheet.getByLabelText('When (Toronto time)'), { target: { value: '2026-11-10T23:00' } })
       fireEvent.click(sheet.getByRole('button', { name: 'Add' }))
@@ -130,13 +144,13 @@ describe('counter buttons', () => {
       expect(countersApi.tap).not.toHaveBeenCalled()
     })
     it("deletes one of today's taps", () => {
-      const { countersApi } = renderApp(<CounterButtons />, { events })
+      const { countersApi } = renderApp(<CounterPills />, { events })
       const sheet = openSheet()
       fireEvent.click(sheet.getByRole('button', { name: 'Delete tap at 9:00 am' }))
       expect(countersApi.removeEvent).toHaveBeenCalledWith('e1')
     })
     it("edits a tap's time", () => {
-      const { countersApi } = renderApp(<CounterButtons />, { events })
+      const { countersApi } = renderApp(<CounterPills />, { events })
       const sheet = openSheet()
       fireEvent.click(sheet.getByRole('button', { name: 'Edit tap at 9:00 am' }))
       expect(sheet.getByLabelText('Time')).toHaveValue('2026-11-10T09:00')
@@ -145,24 +159,24 @@ describe('counter buttons', () => {
       expect(countersApi.editEvent).toHaveBeenCalledWith('e1', { at: new Date('2026-11-10T14:30:00Z'), qty: 1, note: null })
     })
     it('links to the stats', () => {
-      renderApp(<CounterButtons />, { events })
+      renderApp(<CounterPills />, { events })
       expect(openSheet().getByRole('link', { name: /See stats/ })).toHaveAttribute('href', '/insights?tab=counters&counter=c-cig')
     })
   })
 
   it('are turned off while offline', () => {
-    renderApp(<CounterButtons />, { events })
+    renderApp(<CounterPills />, { events })
     act(() => { window.dispatchEvent(new Event('offline')) })
     expect(btn(/^Cigarette/)).toBeDisabled()
     act(() => { window.dispatchEvent(new Event('online')) })
     expect(btn(/^Cigarette/)).toBeEnabled()
   })
   it('render nothing when there are no counters', () => {
-    const { container } = renderApp(<CounterButtons />, { countersApi: fakeCountersApi([], []) })
+    const { container } = renderApp(<CounterPills />, { countersApi: fakeCountersApi([], []) })
     expect(container.querySelector('[role="group"]')).toBeNull()
   })
   it('skip archived counters', () => {
-    renderApp(<CounterButtons />, { counters: [{ id: 'c1', name: 'Gone', emoji: null, color: '#000000', sort: 0, archived: true }, { id: 'c2', name: 'Here', emoji: null, color: '#000000', sort: 1, archived: false }] })
+    renderApp(<CounterPills />, { counters: [{ id: 'c1', name: 'Gone', short_label: null, color: '#000000', sort: 0, archived: true }, { id: 'c2', name: 'Here', short_label: null, color: '#000000', sort: 1, archived: false }] })
     expect(screen.queryByRole('button', { name: /^Gone/ })).toBeNull()
     expect(screen.getByRole('button', { name: /^Here/ })).toBeInTheDocument()
   })

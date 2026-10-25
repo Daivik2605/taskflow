@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { area } from '../../lib/fixtures'
 import { AREAS, COUNTERS, fakeAreasApi, fakeCountersApi, renderApp } from '../../test-utils'
+import { ACTIVITIES, fakeActivitiesApi } from '../../test-utils'
+import { ActivitiesSettings } from './ActivitiesSettings'
 import { CountersSettings } from './CountersSettings'
 import { TagsSettings } from './TagsSettings'
 
@@ -20,9 +22,8 @@ describe('Settings → Tags', () => {
     const form = within(screen.getByRole('form', { name: 'Add a sub-tag to Study' }))
     expect(form.queryByLabelText('Kind')).toBeNull() // a sub-tag takes its parent's kind
     await userEvent.type(form.getByLabelText('Name'), 'Python')
-    await userEvent.type(form.getByLabelText('Emoji'), '🐍')
     await userEvent.click(form.getByRole('button', { name: 'Add sub-tag' }))
-    expect(areasApi.add).toHaveBeenCalledWith(expect.objectContaining({ name: 'Python', parent_id: 'a-study', emoji: '🐍' }))
+    expect(areasApi.add).toHaveBeenCalledWith(expect.objectContaining({ name: 'Python', parent_id: 'a-study' }))
   })
   it('adds a parent tag with a kind', async () => {
     const { areasApi } = renderApp(<TagsSettings />)
@@ -51,16 +52,14 @@ describe('Settings → Tags', () => {
     expect(screen.queryByLabelText(/^Kind/)).toBeNull()
     expect(screen.getByText(/inherited from its parent/)).toBeInTheDocument()
   })
-  it('renames and sets an emoji', async () => {
+  it('renames a tag', async () => {
     const { areasApi } = renderApp(<TagsSettings />)
     await edit('DSA')
     const name = screen.getByLabelText('Name')
     await userEvent.clear(name)
     await userEvent.type(name, 'Algorithms')
-    await userEvent.clear(screen.getByLabelText('Emoji'))
-    await userEvent.type(screen.getByLabelText('Emoji'), '🧮')
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(areasApi.update).toHaveBeenCalledWith('a-dsa', { name: 'Algorithms', emoji: '🧮' })
+    expect(areasApi.update).toHaveBeenCalledWith('a-dsa', { name: 'Algorithms' })
   })
   it('changes colour from the swatches', async () => {
     const { areasApi } = renderApp(<TagsSettings />)
@@ -137,30 +136,123 @@ describe('Settings → Counters', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Move down: Cigarette' }))
     expect(countersApi.reorderCounters).toHaveBeenCalledWith([{ id: 'c-weed', sort: 0 }, { id: 'c-cig', sort: 1 }])
   })
-  it('adds a counter with an emoji', async () => {
+  it('adds a counter with a short label', async () => {
     const { countersApi } = renderApp(<CountersSettings />)
     await userEvent.type(screen.getByLabelText('New counter name'), 'Coffee')
-    await userEvent.type(screen.getByLabelText('New counter emoji'), '☕')
+    await userEvent.type(screen.getByLabelText('New counter short label'), 'Cof')
     await userEvent.click(screen.getByRole('button', { name: 'Add counter' }))
-    expect(countersApi.addCounter).toHaveBeenCalledWith({ name: 'Coffee', emoji: '☕', color: expect.stringMatching(/^#/) })
+    expect(countersApi.addCounter).toHaveBeenCalledWith({ name: 'Coffee', short_label: 'Cof', color: expect.stringMatching(/^#/) })
   })
-  it('renames, changes the emoji, and archives', async () => {
+  it('renames, changes the short label, and archives', async () => {
     const { countersApi } = renderApp(<CountersSettings />)
     await edit('Weed')
     await userEvent.clear(screen.getByLabelText('Name'))
     await userEvent.type(screen.getByLabelText('Name'), 'Cannabis')
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(countersApi.updateCounter).toHaveBeenCalledWith('c-weed', { name: 'Cannabis', emoji: '🌿' })
+    expect(countersApi.updateCounter).toHaveBeenCalledWith('c-weed', { name: 'Cannabis', short_label: 'Weed' })
     await edit('Cigarette')
     await userEvent.click(screen.getByRole('button', { name: 'Archive' }))
     expect(countersApi.updateCounter).toHaveBeenLastCalledWith('c-cig', { archived: true })
   })
   it('shows archived counters apart and shows a refusal', async () => {
     const updateCounter = vi.fn(async () => 'A counter with that name already exists.')
-    renderApp(<CountersSettings />, { countersApi: fakeCountersApi([...COUNTERS, { id: 'c-old', name: 'Old', emoji: null, color: '#000000', sort: 5, archived: true }], [], { updateCounter }) })
+    renderApp(<CountersSettings />, { countersApi: fakeCountersApi([...COUNTERS, { id: 'c-old', name: 'Old', short_label: null, color: '#000000', sort: 5, archived: true }], [], { updateCounter }) })
     expect(screen.getByRole('heading', { name: 'Archived' })).toBeInTheDocument()
     await edit('Weed')
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('already exists')
+  })
+})
+
+describe('Settings → Tags, offer on tasks', () => {
+  it('toggles whether a tag is offered on tasks', async () => {
+    const { areasApi } = renderApp(<TagsSettings />)
+    await edit('SQL')
+    const box = screen.getByRole('checkbox', { name: /Offer on tasks/ })
+    expect(box).not.toBeChecked()
+    await userEvent.click(box)
+    expect(areasApi.update).toHaveBeenCalledWith('a-sql', { show_for_tasks: true })
+  })
+  it('shows a flagged tag as checked and has no emoji field', async () => {
+    renderApp(<TagsSettings />)
+    await edit('DSA')
+    expect(screen.getByRole('checkbox', { name: /Offer on tasks/ })).toBeChecked()
+    expect(screen.queryByLabelText('Emoji')).toBeNull()
+  })
+})
+
+describe('Settings → Counters, short label', () => {
+  it('edits the short label the header pill shows', async () => {
+    const { countersApi } = renderApp(<CountersSettings />)
+    await edit('Cigarette')
+    expect(screen.getByLabelText('Short label')).toHaveValue('Cig')
+    await userEvent.clear(screen.getByLabelText('Short label'))
+    await userEvent.type(screen.getByLabelText('Short label'), 'Ciggy')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(countersApi.updateCounter).toHaveBeenCalledWith('c-cig', { name: 'Cigarette', short_label: 'Ciggy' })
+  })
+  it('an empty short label is saved empty (the pill then uses the full name)', async () => {
+    const { countersApi } = renderApp(<CountersSettings />)
+    await edit('Weed')
+    await userEvent.clear(screen.getByLabelText('Short label'))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(countersApi.updateCounter).toHaveBeenCalledWith('c-weed', { name: 'Weed', short_label: '' })
+  })
+})
+
+describe('Settings → Activities', () => {
+  const render = (over = {}) => renderApp(<ActivitiesSettings />, { activitiesApi: fakeActivitiesApi(ACTIVITIES, [], over) })
+  it('lists activities in order with tag, minutes and target', () => {
+    render()
+    expect(screen.getAllByRole('button', { name: /^Edit / }).map((b) => b.getAttribute('aria-label'))).toEqual(['Edit Kriya', 'Edit Gym'])
+    expect(screen.getByRole('button', { name: 'Edit Gym' })).toHaveTextContent('Work · 60 min · 3 a week')
+  })
+  it('adds an activity on a tag with minutes and an optional weekly target', async () => {
+    const { activitiesApi } = render()
+    const form = within(screen.getByRole('form', { name: 'Add activity' }))
+    await userEvent.type(form.getByLabelText('Name'), 'Run')
+    await userEvent.click(form.getByRole('button', { name: 'Activity tag' }))
+    await userEvent.click(screen.getByRole('option', { name: /Work/ }))
+    await userEvent.clear(form.getByLabelText('Default minutes'))
+    await userEvent.type(form.getByLabelText('Default minutes'), '25')
+    await userEvent.type(form.getByLabelText(/Weekly target/), '4')
+    await userEvent.click(form.getByRole('button', { name: 'Add activity' }))
+    expect(activitiesApi.add).toHaveBeenCalledWith({ name: 'Run', area_id: 'a-work', default_minutes: 25, weekly_target: 4 })
+  })
+  it('needs a tag', async () => {
+    const { activitiesApi } = render()
+    const form = within(screen.getByRole('form', { name: 'Add activity' }))
+    await userEvent.type(form.getByLabelText('Name'), 'Run')
+    await userEvent.click(form.getByRole('button', { name: 'Add activity' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Pick a tag')
+    expect(activitiesApi.add).not.toHaveBeenCalled()
+  })
+  it('edits name, minutes and target; an empty target means none', async () => {
+    const { activitiesApi } = render()
+    await edit('Gym')
+    const minutes = screen.getAllByLabelText('Default minutes')[0]
+    await userEvent.clear(minutes)
+    await userEvent.type(minutes, '75')
+    await userEvent.clear(screen.getAllByLabelText(/Weekly target/)[0])
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(activitiesApi.update).toHaveBeenCalledWith('act-gym', { name: 'Gym', area_id: 'a-work', default_minutes: 75, weekly_target: null })
+  })
+  it('hides an activity and moves it', async () => {
+    const { activitiesApi } = render()
+    expect(screen.getByRole('button', { name: 'Move up: Kriya' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Move down: Kriya' }))
+    expect(activitiesApi.reorder).toHaveBeenCalledWith([{ id: 'act-gym', sort: 0 }, { id: 'act-kriya', sort: 1 }])
+    await edit('Gym')
+    await userEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(activitiesApi.update).toHaveBeenLastCalledWith('act-gym', { archived: true })
+  })
+  it('shows a refusal from the data layer', async () => {
+    render({ add: vi.fn(async () => 'An activity with that name already exists.') })
+    const form = within(screen.getByRole('form', { name: 'Add activity' }))
+    await userEvent.type(form.getByLabelText('Name'), 'Gym')
+    await userEvent.click(form.getByRole('button', { name: 'Activity tag' }))
+    await userEvent.click(screen.getAllByRole('option', { name: /Work/ })[0])
+    await userEvent.click(form.getByRole('button', { name: 'Add activity' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('already exists')
   })
 })

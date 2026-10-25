@@ -5,8 +5,8 @@ import { byAreaSort, type Area, type TagKind } from '../lib/areas'
 import { nextTagSort, validateArchive, validateMerge, validateMove, validateTagName } from '../lib/tags'
 import { db, friendlyDbError } from './db'
 
-export interface NewTag { name: string; parent_id: string | null; kind: TagKind; color: string; emoji: string | null }
-export type TagPatch = Partial<Pick<Area, 'name' | 'kind' | 'color' | 'emoji' | 'archived' | 'parent_id'>>
+export interface NewTag { name: string; parent_id: string | null; kind: TagKind; color: string }
+export type TagPatch = Partial<Pick<Area, 'name' | 'kind' | 'color' | 'archived' | 'parent_id' | 'show_for_tasks'>>
 
 export interface AreasApi {
   areas: Area[] // every tag, including archived, in display order (parents and sub-tags together)
@@ -28,7 +28,7 @@ export function useAreas(): AreasApi {
   return c
 }
 
-const COLUMNS = 'id,name,kind,app_key,color,emoji,sort,archived,parent_id'
+const COLUMNS = 'id,name,kind,app_key,color,show_for_tasks,sort,archived,parent_id'
 const message = (error: { code?: string; message: string }) => (error.code === '23505' ? 'A tag with that name already exists there.' : friendlyDbError(error))
 
 export function AreasProvider({ children }: { children: ReactNode }) {
@@ -72,7 +72,7 @@ export function AreasProvider({ children }: { children: ReactNode }) {
     if (input.parent_id && !parent) return 'That parent no longer exists.'
     if (parent && parent.parent_id) return 'Tags have two levels: pick a top-level tag as the parent.'
     const { data, error } = await db().from('taskflow_areas')
-      .insert({ name: input.name.trim(), parent_id: input.parent_id, kind: parent ? parent.kind : input.kind, color: input.color, emoji: input.emoji || null, sort: nextTagSort(ref.current, input.parent_id) })
+      .insert({ name: input.name.trim(), parent_id: input.parent_id, kind: parent ? parent.kind : input.kind, color: input.color, sort: nextTagSort(ref.current, input.parent_id) })
       .select(COLUMNS).single()
     if (error) return message(error)
     setAreas((l) => [...l, data as Area])
@@ -97,7 +97,6 @@ export function AreasProvider({ children }: { children: ReactNode }) {
       const problem = validateArchive(ref.current, id)
       if (problem) return problem
     }
-    if (body.emoji !== undefined) body = { ...body, emoji: body.emoji || null }
     // Optimistic. A parent's kind flows down to its sub-tags, and a moved sub-tag takes its new parent's kind (the database does the same).
     const newParent = body.parent_id !== undefined && body.parent_id ? ref.current.find((a) => a.id === body.parent_id) : null
     const before = ref.current

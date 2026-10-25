@@ -6,11 +6,11 @@ import { runSeed, type SeedDb, type TagRow } from './seedRunner'
 
 describe('seed data', () => {
   it('equals the tree the SQL migration produces (shared fixture with supabase/tests)', () => {
-    const tree = TAG_SEEDS.map((t) => ({ name: t.name, kind: t.kind, emoji: t.emoji, children: t.children.map((c) => ({ name: c.name, app_key: c.app_key, emoji: c.emoji })) }))
+    const tree = TAG_SEEDS.map((t) => ({ name: t.name, kind: t.kind, show_for_tasks: t.show_for_tasks, children: t.children.map((c) => ({ name: c.name, app_key: c.app_key, show_for_tasks: c.show_for_tasks })) }))
     expect(tree).toEqual(expected.tree)
     expect(PRESET_SEEDS.map((p) => ({ name: p.name, tag: p.tag, default_minutes: p.default_minutes }))).toEqual(expected.presets)
     expect(JOB_SEEDS).toEqual(expected.jobs)
-    expect(COUNTER_SEEDS.map((c) => ({ name: c.name, emoji: c.emoji }))).toEqual(expected.counters)
+    expect(COUNTER_SEEDS.map((c) => ({ name: c.name, short_label: c.short_label }))).toEqual(expected.counters)
     expect(PROJECT_SEED).toMatchObject(expected.project)
   })
   it('has seven parents with valid, distinct kinds and unique names per parent', () => {
@@ -27,11 +27,11 @@ describe('seed data', () => {
     for (const p of PRESET_SEEDS) expect(paths).toContain(p.tag)
     expect(paths).toContain(PROJECT_SEED.tag)
     for (const j of JOB_SEEDS) expect(paths).toContain(j.tag)
-    expect(PRESET_SEEDS.map((p) => [p.name, p.default_minutes])).toEqual([['Kriya', 35], ['Padmasadna', 20]])
+    expect(PRESET_SEEDS.map((p) => [p.name, p.default_minutes])).toEqual([['Kriya', 35], ['Padmasadna', 20], ['Home Workout', 30], ['Gym', 60]])
   })
   it('builds the default actions with unique keys, one shift per job', () => {
-    const a = buildActions([{ id: 'j1', employer: 'Tim Hortons' }, { id: 'j2', employer: 'Oland Stations' }], [{ id: 'p1', name: 'Kriya' }, { id: 'p2', name: 'Padmasadna' }])
-    expect(a.map((x) => x.key)).toEqual(['shift:j1', 'shift:j2', 'nap_reset', 'preset:p1', 'preset:p2', 'sleep_checkin'])
+    const a = buildActions([{ id: 'j1', employer: 'Tim Hortons' }, { id: 'j2', employer: 'Oland Stations' }], [{ id: 'p1', name: 'Kriya' }, { id: 'p2', name: 'Padmasadna' }, { id: 'p3', name: 'Home Workout' }, { id: 'p4', name: 'Gym' }])
+    expect(a.map((x) => x.key)).toEqual(['shift:j1', 'shift:j2', 'nap_reset', 'preset:p1', 'preset:p2', 'preset:p3', 'preset:p4', 'sleep_checkin'])
     expect(a.map((x) => x.label)).toEqual(expected.actions)
   })
 })
@@ -73,12 +73,12 @@ describe('runSeed', () => {
     const { db, state } = fakeDb()
     expect(await runSeed(db)).toBe(true)
     expect([...state.tags.values()].filter((t) => t.parent_id === null)).toHaveLength(7)
-    expect([...state.tags.values()].filter((t) => t.parent_id !== null)).toHaveLength(13)
-    expect(state.presets.size).toBe(2)
+    expect([...state.tags.values()].filter((t) => t.parent_id !== null)).toHaveLength(14)
+    expect(state.presets.size).toBe(4)
     expect([...state.projects]).toEqual(['AEO Studio'])
     expect(state.jobs.size).toBe(2)
     expect([...state.counters]).toEqual(['Cigarette', 'Weed'])
-    expect(state.actions.size).toBe(6)
+    expect(state.actions.size).toBe(8)
     expect(state.settings).toBe(1)
     expect(state.seeded).toBe(true)
   })
@@ -102,16 +102,16 @@ describe('runSeed', () => {
     const { db, state } = fakeDb()
     await runSeed(db)
     expect(await runSeed(db)).toBe(false)
-    expect(state.tags.size).toBe(20)
-    expect(state.actions.size).toBe(6)
+    expect(state.tags.size).toBe(21)
+    expect(state.actions.size).toBe(8)
   })
   it('two simultaneous runs (two devices / StrictMode) still leave one copy', async () => {
     const { db, state } = fakeDb()
     await Promise.all([runSeed(db), runSeed(db)])
-    expect(state.tags.size).toBe(20)
-    expect(state.presets.size).toBe(2)
+    expect(state.tags.size).toBe(21)
+    expect(state.presets.size).toBe(4)
     expect(state.jobs.size).toBe(2)
-    expect(state.actions.size).toBe(6)
+    expect(state.actions.size).toBe(8)
     expect(state.counters.size).toBe(2)
   })
   it('an interrupted seed finishes on the next run without duplicating', async () => {
@@ -120,8 +120,24 @@ describe('runSeed', () => {
     await expect(runSeed(failing)).rejects.toThrow('network')
     expect(state.seeded).toBe(false)
     expect(await runSeed(db)).toBe(true)
-    expect(state.tags.size).toBe(20)
+    expect(state.tags.size).toBe(21)
     expect(state.jobs.size).toBe(2)
-    expect(state.actions.size).toBe(6)
+    expect(state.actions.size).toBe(8)
+  })
+})
+
+describe('revision 4 seed rules', () => {
+  it('offers exactly the six task tags (Study, Oland Stations, Commute, AEO Studio, Projects, Trading)', () => {
+    const flagged = TAG_SEEDS.flatMap((t) => [t.show_for_tasks ? t.name : null, ...t.children.map((c) => (c.show_for_tasks ? c.name : null))]).filter(Boolean)
+    expect(flagged.sort()).toEqual(['AEO Studio', 'Commute', 'Oland Stations', 'Projects', 'Study', 'Trading'])
+  })
+  it('puts Projects under Hustle', () => {
+    expect(TAG_SEEDS.find((t) => t.name === 'Hustle')!.children.map((c) => c.name)).toEqual(['AEO Studio', 'Projects'])
+  })
+  it('has no emoji anywhere in the seed', () => {
+    expect(JSON.stringify([TAG_SEEDS, COUNTER_SEEDS, PRESET_SEEDS])).not.toMatch(/\p{Extended_Pictographic}/u)
+  })
+  it('gives the counters short labels for the header pills', () => {
+    expect(COUNTER_SEEDS.map((c) => c.short_label)).toEqual(['Cig', 'Weed'])
   })
 })

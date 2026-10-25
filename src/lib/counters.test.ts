@@ -152,9 +152,9 @@ describe('undo and realtime merge', () => {
 
 describe('counter list rules', () => {
   const cs: Counter[] = [
-    { id: '1', name: 'Weed', emoji: '🌿', color: '#22c55e', sort: 1, archived: false },
-    { id: '2', name: 'Cigarette', emoji: '🚬', color: '#6b7280', sort: 0, archived: false },
-    { id: '3', name: 'Old', emoji: null, color: '#000000', sort: 2, archived: true },
+    { id: '1', name: 'Weed', short_label: 'Weed', color: '#22c55e', sort: 1, archived: false },
+    { id: '2', name: 'Cigarette', short_label: 'Cig', color: '#6b7280', sort: 0, archived: false },
+    { id: '3', name: 'Old', short_label: null, color: '#000000', sort: 2, archived: true },
   ]
   it('orders active counters and picks the next sort', () => {
     expect(activeCounters(cs).map((c) => c.name)).toEqual(['Cigarette', 'Weed'])

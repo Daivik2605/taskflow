@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../app/auth'
+import { ActivitiesSettings } from './settings/ActivitiesSettings'
 import { CountersSettings } from './settings/CountersSettings'
 import { TagsSettings } from './settings/TagsSettings'
 import { useSettings } from '../data/settings'
@@ -49,9 +50,10 @@ export function Settings() {
       </div>
 
       <TagsSettings />
+      <ActivitiesSettings />
       <CountersSettings />
 
-      <p className="text-sm text-slate-500">Presets (phase 4), Actions (5) and Jobs (6) settings arrive in their phases.</p>
+      <p className="text-sm text-slate-500">Actions (phase 5) and Jobs (6) settings arrive in their phases.</p>
     </section>
   )
 }

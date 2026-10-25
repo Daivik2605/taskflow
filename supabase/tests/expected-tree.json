@@ -3,113 +3,118 @@
   {
    "name": "Work",
    "kind": "work",
-   "emoji": "💼",
    "children": [
     {
      "name": "Tim Hortons",
      "app_key": null,
-     "emoji": "🍩"
+     "show_for_tasks": false
     },
     {
      "name": "Oland Stations",
      "app_key": null,
-     "emoji": "⛽"
+     "show_for_tasks": true
     },
     {
      "name": "Commute",
      "app_key": null,
-     "emoji": "🚌"
+     "show_for_tasks": true
     }
-   ]
+   ],
+   "show_for_tasks": false
   },
   {
    "name": "Hustle",
    "kind": "hustle",
-   "emoji": "🚀",
    "children": [
     {
      "name": "AEO Studio",
      "app_key": null,
-     "emoji": "🧠"
+     "show_for_tasks": true
+    },
+    {
+     "name": "Projects",
+     "app_key": null,
+     "show_for_tasks": true
     }
-   ]
+   ],
+   "show_for_tasks": false
   },
   {
    "name": "Study",
    "kind": "study",
-   "emoji": "📚",
    "children": [
     {
      "name": "DSA",
      "app_key": "dsa",
-     "emoji": "🧩"
+     "show_for_tasks": false
     },
     {
      "name": "SQL",
      "app_key": null,
-     "emoji": "🗄️"
+     "show_for_tasks": false
     },
     {
      "name": "Trading",
      "app_key": "trading",
-     "emoji": "📈"
+     "show_for_tasks": true
     },
     {
      "name": "Tableau Data Analyst Certification",
      "app_key": null,
-     "emoji": "📊"
+     "show_for_tasks": false
     },
     {
      "name": "Databricks Data Analyst Certification",
      "app_key": null,
-     "emoji": "🧱"
+     "show_for_tasks": false
     }
-   ]
+   ],
+   "show_for_tasks": true
   },
   {
    "name": "Wellness",
    "kind": "wellness",
-   "emoji": "🧘",
    "children": [
     {
      "name": "Kriya",
      "app_key": null,
-     "emoji": "🌬️"
+     "show_for_tasks": false
     },
     {
      "name": "Padmasadna",
      "app_key": null,
-     "emoji": "🪷"
+     "show_for_tasks": false
     },
     {
      "name": "Home Workout",
      "app_key": null,
-     "emoji": "💪"
+     "show_for_tasks": false
     },
     {
      "name": "Gym",
      "app_key": null,
-     "emoji": "🏋️"
+     "show_for_tasks": false
     }
-   ]
+   ],
+   "show_for_tasks": false
   },
   {
    "name": "Break",
    "kind": "break",
-   "emoji": "☕",
-   "children": []
+   "children": [],
+   "show_for_tasks": false
   },
   {
    "name": "Sleep",
    "kind": "sleep",
-   "emoji": "😴",
-   "children": []
+   "children": [],
+   "show_for_tasks": false
   },
   {
    "name": "Personal",
    "kind": "personal",
-   "emoji": "🏠",
-   "children": []
+   "children": [],
+   "show_for_tasks": false
   }
  ],
  "presets": [
@@ -122,6 +127,16 @@
    "name": "Padmasadna",
    "tag": "Wellness/Padmasadna",
    "default_minutes": 20
+  },
+  {
+   "name": "Home Workout",
+   "tag": "Wellness/Home Workout",
+   "default_minutes": 30
+  },
+  {
+   "name": "Gym",
+   "tag": "Wellness/Gym",
+   "default_minutes": 60
   }
  ],
  "jobs": [
@@ -137,11 +152,11 @@
  "counters": [
   {
    "name": "Cigarette",
-   "emoji": "🚬"
+   "short_label": "Cig"
   },
   {
    "name": "Weed",
-   "emoji": "🌿"
+   "short_label": "Weed"
   }
  ],
  "actions": [
@@ -150,6 +165,8 @@
   "Nap + reset",
   "Kriya",
   "Padmasadna",
+  "Home Workout",
+  "Gym",
   "Sleep check-in"
  ],
  "project": {

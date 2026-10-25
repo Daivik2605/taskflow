@@ -64,22 +64,33 @@ describe('Today', () => {
     await userEvent.click(within(passport).getByRole('button', { name: 'Reschedule' }))
     expect(await screen.findByLabelText('Title')).toHaveValue('Renew passport')
   })
-  it('quick add on Today defaults to today and the Personal tag', async () => {
+  it('quick add on Today defaults to today and no tag', async () => {
     const api = fakeTasksApi([])
     renderApp(<Today />, { api })
-    expect(screen.getByRole('button', { name: 'Tag' })).toHaveTextContent('Personal')
+    expect(screen.getByRole('button', { name: 'Tag' })).toHaveTextContent('No tag')
     await userEvent.type(screen.getByLabelText('Task title'), 'Pass G2{Enter}')
-    expect(api.add).toHaveBeenCalledWith({ title: 'Pass G2', due_on: '2026-11-10', area_id: 'a-personal' })
+    expect(api.add).toHaveBeenCalledWith({ title: 'Pass G2', due_on: '2026-11-10', area_id: null })
+  })
+  it('quick add offers only the task tags (plus No tag)', async () => {
+    renderApp(<Today />, { tasks: [] })
+    await userEvent.click(screen.getByRole('button', { name: 'Tag' }))
+    const list = within(screen.getByRole('listbox', { name: 'Tag list' }))
+    expect(list.getAllByRole('option').map((o) => o.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['No tag', 'Studygeneral', 'DSA'])
   })
   it('says so when there are no tasks at all', () => {
     renderApp(<Today />, { tasks: [] })
     expect(screen.getByText(/No tasks yet/)).toBeInTheDocument()
   })
-  it('puts the counter buttons above everything else', () => {
+  it('no longer has big counter buttons (they are header pills now)', () => {
     renderApp(<Today />, { tasks: [] })
-    const group = screen.getByRole('group', { name: 'Counters' })
+    expect(screen.queryByRole('group', { name: 'Counters' })).toBeNull()
+  })
+  it('shows the activity buttons under the overview and above quick add', () => {
+    renderApp(<Today />, { tasks: [], activities: [{ id: 'g', name: 'Gym', area_id: 'a-work', default_minutes: 60, weekly_target: 3, sort: 0, archived: false }] })
+    const overview = screen.getByRole('region', { name: 'Overview' })
+    const acts = screen.getByRole('group', { name: 'Activities' })
     const form = screen.getByRole('form', { name: 'Quick add task' })
-    expect(group.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(within(group).getAllByRole('button', { name: /Tap to add one/ })).toHaveLength(2)
+    expect(overview.compareDocumentPosition(acts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(acts.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })

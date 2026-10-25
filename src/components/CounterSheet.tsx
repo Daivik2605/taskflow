@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom'
 import { useConnection } from '../app/connection'
 import { useToday } from '../app/useToday'
 import { useCounters } from '../data/counters'
-import { todaysEvents, type Counter, type CounterEvent } from '../lib/counters'
+import { lastEvent, sinceLabel, todaysEvents, type Counter, type CounterEvent } from '../lib/counters'
 import { formatTime, instantToTorontoLocal, torontoLocalToInstant } from '../lib/time'
 import { btn, btnDanger, btnPrimary, input, label } from './ui'
 
 /** Long-press / "…" on a counter: add a tap at a past time, and edit or delete today's taps. Times are read as Toronto time. */
-export function CounterSheet({ counter, onClose }: { counter: Counter | null; onClose: () => void }) {
+export function CounterSheet({ counter, now, onClose }: { counter: Counter | null; now: Date; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     const d = ref.current
@@ -20,12 +20,12 @@ export function CounterSheet({ counter, onClose }: { counter: Counter | null; on
   return (
     <dialog ref={ref} onClose={onClose} onClick={(e) => { if (e.target === ref.current) onClose() }} aria-label={counter ? `${counter.name} taps` : 'Counter'}
       className="m-0 mt-auto max-h-[92vh] w-full max-w-none overflow-y-auto rounded-t-2xl bg-white p-0 text-slate-900 backdrop:bg-black/40 dark:bg-slate-900 dark:text-slate-100 lg:m-auto lg:max-w-md lg:rounded-2xl">
-      {counter && <SheetBody key={counter.id} counter={counter} onClose={onClose} />}
+      {counter && <SheetBody key={counter.id} counter={counter} now={now} onClose={onClose} />}
     </dialog>
   )
 }
 
-function SheetBody({ counter, onClose }: { counter: Counter; onClose: () => void }) {
+function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onClose: () => void }) {
   const { events, tap, removeEvent } = useCounters()
   const { writesDisabled } = useConnection()
   const today = useToday()
@@ -36,6 +36,7 @@ function SheetBody({ counter, onClose }: { counter: Counter; onClose: () => void
   const [editing, setEditing] = useState<string | null>(null)
 
   const taps = todaysEvents(events, counter.id, today)
+  const last = lastEvent(events, counter.id)
 
   const check = (whenValue: string, qtyValue: string): { at: Date; qty: number } | null => {
     let at: Date
@@ -58,7 +59,10 @@ function SheetBody({ counter, onClose }: { counter: Counter; onClose: () => void
   return (
     <div className="space-y-5 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
       <div className="flex items-start justify-between gap-2">
-        <h2 className="text-lg font-semibold">{counter.emoji} {counter.name}</h2>
+        <div>
+          <h2 className="text-lg font-semibold"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: counter.color }} aria-hidden="true" />{counter.name}</h2>
+          <p className="text-sm text-slate-500">{last ? `last: ${sinceLabel(last.at, now)}` : 'none yet'}</p>
+        </div>
         <button type="button" onClick={onClose} className="min-h-11 min-w-11 rounded-lg text-xl" aria-label="Close">✕</button>
       </div>
 

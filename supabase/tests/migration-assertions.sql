@@ -11,7 +11,7 @@ select set_config('tf.a', :'a', false), set_config('tf.b', :'b', false) \g /dev/
 do $$ declare r record; n int; begin
   for r in select * from tftest.before_counts loop
     select count(*) into n from taskflow_tasks where user_id = r.user_id;    if n <> r.tasks    then raise exception 'tasks % -> % for %', r.tasks, n, r.user_id; end if;
-    select count(*) into n from taskflow_presets where user_id = r.user_id;  if n <> r.presets  then raise exception 'presets changed'; end if;
+    select count(*) into n from taskflow_presets where user_id = r.user_id;  if n < r.presets  then raise exception 'presets lost'; end if;
     select count(*) into n from taskflow_projects where user_id = r.user_id; if n <> r.projects then raise exception 'projects changed'; end if;
     select count(*) into n from taskflow_sessions where user_id = r.user_id; if n <> r.sessions then raise exception 'sessions changed'; end if;
     select count(*) into n from taskflow_notes where user_id = r.user_id;    if n <> r.notes    then raise exception 'notes changed'; end if;
@@ -33,8 +33,8 @@ end $$;
 
 -- user A: the tree equals what a brand-new account is seeded with ---------------------------------
 do $$ declare exp jsonb := current_setting('tf.expected')::jsonb; actual jsonb; u uuid := current_setting('tf.a')::uuid; begin
-  select jsonb_agg(jsonb_build_object('name', p.name, 'kind', p.kind, 'emoji', p.emoji, 'children',
-           coalesce((select jsonb_agg(jsonb_build_object('name', c.name, 'app_key', c.app_key, 'emoji', c.emoji) order by c.sort, c.name)
+  select jsonb_agg(jsonb_build_object('name', p.name, 'kind', p.kind, 'show_for_tasks', p.show_for_tasks, 'children',
+           coalesce((select jsonb_agg(jsonb_build_object('name', c.name, 'app_key', c.app_key, 'show_for_tasks', c.show_for_tasks) order by c.sort, c.name)
                      from taskflow_areas c where c.parent_id = p.id and not c.archived), '[]'::jsonb)) order by p.sort, p.name)
     into actual from taskflow_areas p where p.user_id = u and p.parent_id is null and not p.archived;
   if actual <> exp->'tree' then raise exception E'tree mismatch\nactual:   %\nexpected: %', actual, exp->'tree'; end if;
@@ -51,7 +51,7 @@ do $$ declare exp jsonb := current_setting('tf.expected')::jsonb; actual jsonb; 
   if (select jsonb_agg(jsonb_build_object('employer', employer, 'tag', tftest.tag_path(area_id)) order by (employer <> 'Tim Hortons'))
         from taskflow_jobs where user_id = u) <> exp->'jobs' then raise exception 'jobs mismatch'; end if;
   if exists (select 1 from taskflow_jobs where user_id = u and (hourly_rate is not null or pay_period_anchor is not null)) then raise exception 'jobs must keep null rate and anchor'; end if;
-  if (select jsonb_agg(jsonb_build_object('name', name, 'emoji', emoji) order by sort) from taskflow_counters where user_id = u) <> exp->'counters' then raise exception 'counters mismatch'; end if;
+  if (select jsonb_agg(jsonb_build_object('name', name, 'short_label', short_label) order by sort) from taskflow_counters where user_id = u) <> exp->'counters' then raise exception 'counters mismatch'; end if;
   if (select to_jsonb(array_agg(label order by sort)) from taskflow_actions where user_id = u) <> exp->'actions' then
     raise exception 'actions mismatch: %', (select array_agg(label order by sort) from taskflow_actions where user_id = u); end if;
   if (select jsonb_build_object('name', name, 'tag', tftest.tag_path(area_id)) from taskflow_projects where user_id = u) <> exp->'project' then raise exception 'project mismatch'; end if;
@@ -115,8 +115,8 @@ do $$ declare u uuid := current_setting('tf.b')::uuid; r record; got text; exp j
   -- the old "Tableau cert" was merged into it and archived
   if not (select archived from taskflow_areas where user_id = u and name = 'Tableau cert') then raise exception 'Tableau cert should be archived after the merge'; end if;
   -- the seven standard parents and their sub-tags still equal the standard tree
-  select jsonb_agg(jsonb_build_object('name', p.name, 'kind', p.kind, 'emoji', p.emoji, 'children',
-           coalesce((select jsonb_agg(jsonb_build_object('name', c.name, 'app_key', c.app_key, 'emoji', c.emoji) order by c.sort, c.name)
+  select jsonb_agg(jsonb_build_object('name', p.name, 'kind', p.kind, 'show_for_tasks', p.show_for_tasks, 'children',
+           coalesce((select jsonb_agg(jsonb_build_object('name', c.name, 'app_key', c.app_key, 'show_for_tasks', c.show_for_tasks) order by c.sort, c.name)
                      from taskflow_areas c where c.parent_id = p.id and not c.archived), '[]'::jsonb)) order by p.sort, p.name)
     into actual from taskflow_areas p where p.user_id = u and p.parent_id is null and not p.archived
       and p.name in ('Work','Hustle','Study','Wellness','Break','Sleep','Personal');

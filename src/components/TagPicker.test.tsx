@@ -17,7 +17,7 @@ const open = () => userEvent.click(screen.getByRole('button', { name: 'Tag' }))
 describe('tag picker', () => {
   it('shows the chosen tag with its parent, or "No tag"', () => {
     renderApp(<Harness initial="a-dsa" />)
-    expect(screen.getByRole('button', { name: 'Tag' })).toHaveTextContent('🧩DSAin Study')
+    expect(screen.getByRole('button', { name: 'Tag' })).toHaveTextContent('DSAin Study')
   })
   it('shows "No tag" when nothing is chosen', () => {
     renderApp(<Harness />)
@@ -27,7 +27,7 @@ describe('tag picker', () => {
     renderApp(<Harness />)
     await open()
     const study = within(screen.getByRole('group', { name: 'Study' }))
-    expect(study.getAllByRole('option').map((o) => o.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['📚Studygeneral', '🧩DSA', 'SQL'])
+    expect(study.getAllByRole('option').map((o) => o.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['Studygeneral', 'DSA', 'SQL'])
     expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Study', 'Work', 'Personal'])
   })
   it('picking a parent is allowed (time goes to its general bucket)', async () => {
@@ -42,7 +42,7 @@ describe('tag picker', () => {
     renderApp(<Harness />)
     await open()
     const options = screen.getAllByRole('option').map((o) => o.textContent?.replace(/\s+/g, ' ').trim())
-    expect(options.slice(0, 2)).toEqual(['SQL', '💼Work'])
+    expect(options.slice(0, 2)).toEqual(['SQL', 'Work'])
     expect(screen.getByText('Recent')).toBeInTheDocument()
   })
   it('remembers a pick, closes, and offers it first next time', async () => {
@@ -73,5 +73,25 @@ describe('tag picker', () => {
     await open()
     expect(screen.queryByText('Old tag')).toBeNull()
     expect(screen.queryByText('Recent')).toBeNull()
+  })
+})
+
+describe('tag picker, task shortlist', () => {
+  const open = async (value: string | null = null) => {
+    renderApp(<TagPicker value={value} onChange={vi.fn()} allowNone tasksOnly />)
+    await userEvent.click(screen.getByRole('button', { name: 'Tag' }))
+    return within(screen.getByRole('listbox', { name: 'Tag list' }))
+  }
+  it('offers No tag and the flagged tags only', async () => {
+    const list = await open()
+    expect(list.getAllByRole('option').map((o) => o.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['No tag', 'Studygeneral', 'DSA'])
+  })
+  it('shows an unflagged parent as a heading you cannot pick', async () => {
+    const list = await open()
+    expect(list.queryByRole('option', { name: /^Work/ })).toBeNull()
+  })
+  it('still shows a task\'s own tag when it is not flagged', async () => {
+    const list = await open('a-personal')
+    expect(list.getByRole('option', { name: /Personal/ })).toHaveAttribute('aria-selected', 'true')
   })
 })

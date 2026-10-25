@@ -10,18 +10,20 @@ interface Props {
   onChange: (id: string | null) => void
   /** Offer "No tag" (tasks may have none; a timer session may not). */
   allowNone?: boolean
+  /** Only the tags flagged for tasks (Settings → Tags), plus the current value. The timer and activities use the full tree. */
+  tasksOnly?: boolean
   label?: string
 }
 
 /** Grouped tag list: recent tags first, then each parent with its sub-tags indented. Picking a parent is allowed ("general"). */
-export function TagPicker({ value, onChange, allowNone = false, label = 'Tag' }: Props) {
+export function TagPicker({ value, onChange, allowNone = false, tasksOnly = false, label = 'Tag' }: Props) {
   const { areas } = useAreas()
   const [open, setOpen] = useState(false)
   const listId = useId()
   const current = areas.find((a) => a.id === value) ?? null
   const parent = parentOf(areas, value)
   // Read the recent list each time the panel opens, so a pick made elsewhere shows up.
-  const { recent, groups } = useMemo(() => orderForPicker(areas, open ? getRecentTags() : []), [areas, open])
+  const { recent, groups } = useMemo(() => orderForPicker(areas, open ? getRecentTags() : [], { tasksOnly, keepId: value }), [areas, open, tasksOnly, value])
 
   const pick = (a: Area | null) => {
     if (a) rememberTag(a.id)
@@ -29,6 +31,7 @@ export function TagPicker({ value, onChange, allowNone = false, label = 'Tag' }:
     setOpen(false)
   }
 
+  const selectable = (a: Area) => !tasksOnly || a.show_for_tasks || a.id === value
   const option = (a: Area, indent = false, suffix = '') => (
     <li key={`${indent ? 's' : 'p'}-${a.id}-${suffix}`} role="none">
       <button type="button" role="option" aria-selected={a.id === value} onClick={() => pick(a)} className={`flex min-h-11 w-full items-center gap-2 px-3 text-left text-base hover:bg-slate-100 dark:hover:bg-slate-800 ${indent ? 'pl-8' : 'font-medium'} ${a.id === value ? 'bg-indigo-50 dark:bg-indigo-950' : ''}`}>
@@ -66,7 +69,9 @@ export function TagPicker({ value, onChange, allowNone = false, label = 'Tag' }:
           )}
           {groups.map((g) => (
             <ul key={g.tag.id} role="group" aria-label={g.tag.name}>
-              {option(g.tag)}
+              {selectable(g.tag)
+                ? option(g.tag)
+                : <li role="presentation" className="px-3 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{g.tag.name}</li>}
               {g.children.map((c) => option(c, true))}
             </ul>
           ))}

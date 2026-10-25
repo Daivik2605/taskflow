@@ -5,7 +5,7 @@ import { byAreaSort, type Area, type TagKind } from './areas'
 
 export interface TagNode { tag: Area; children: Area[] }
 
-export const tagLabel = (a: Pick<Area, 'name' | 'emoji'>) => (a.emoji ? `${a.emoji} ${a.name}` : a.name)
+export const tagLabel = (a: Pick<Area, 'name'>) => a.name
 
 export function buildTree(areas: Area[], opts: { includeArchived?: boolean } = {}): TagNode[] {
   const keep = (a: Area) => opts.includeArchived || !a.archived
@@ -93,13 +93,27 @@ export function pushRecent(list: string[], id: string, max = 8): string[] {
   return [id, ...list.filter((x) => x !== id)].slice(0, max)
 }
 
-/** Recent tags first (only ones that still exist and aren't archived), then the tree. */
-export function orderForPicker(areas: Area[], recentIds: string[]): { recent: Area[]; groups: TagNode[] } {
+/**
+ * The tags a task may be given (SPEC §2b revision 4): only tags flagged `show_for_tasks`. A flagged sub-tag is listed under its
+ * parent, which appears as a heading but is only selectable if flagged itself. `keepId` is the task's current tag: it stays
+ * visible even if it isn't flagged, so an old task never shows a blank tag.
+ */
+export function taskTagTree(areas: Area[], keepId: string | null = null): TagNode[] {
+  const offered = (a: Area) => !a.archived && (a.show_for_tasks || a.id === keepId)
+  return buildTree(areas)
+    .map((n) => ({ tag: n.tag, children: n.children.filter(offered) }))
+    .filter((n) => offered(n.tag) || n.children.length > 0)
+}
+
+/** Recent tags first (only ones that still exist, aren't archived and pass `allowed`), then the tree. */
+export function orderForPicker(areas: Area[], recentIds: string[], opts: { tasksOnly?: boolean; keepId?: string | null } = {}): { recent: Area[]; groups: TagNode[] } {
+  const groups = opts.tasksOnly ? taskTagTree(areas, opts.keepId ?? null) : buildTree(areas)
+  const allowed = new Set(groups.flatMap((g) => [g.tag, ...g.children]).map((a) => a.id))
   const recent = recentIds
     .map((id) => areas.find((a) => a.id === id))
-    .filter((a): a is Area => !!a && !a.archived)
+    .filter((a): a is Area => !!a && !a.archived && (!opts.tasksOnly || (allowed.has(a.id) && (a.show_for_tasks || a.id === opts.keepId))))
     .slice(0, RECENT_MAX)
-  return { recent, groups: buildTree(areas) }
+  return { recent, groups }
 }
 
 const KEY = 'taskflow-recent-tags'

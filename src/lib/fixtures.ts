@@ -3,7 +3,7 @@ import type { Area } from './areas'
 import type { Task } from './tasks'
 
 export const area = (over: Partial<Area> & { id: string; name: string }): Area => ({
-  kind: 'personal', app_key: null, color: '#64748b', emoji: null, sort: 0, archived: false, parent_id: null, ...over,
+  kind: 'personal', app_key: null, color: '#64748b', show_for_tasks: false, sort: 0, archived: false, parent_id: null, ...over,
 })
 
 let n = 0

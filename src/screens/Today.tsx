@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
-import { CounterButtons } from '../components/CounterButtons'
+import { ActivityButtons } from '../components/ActivityButtons'
 import { QuickAdd } from '../components/QuickAdd'
 import { TaskList, TaskRow } from '../components/TaskRow'
 import { OverviewStrip } from '../components/OverviewStrip'
@@ -37,7 +37,7 @@ export function Today() {
       <OverviewStrip />
 
       <div className="mx-auto max-w-2xl space-y-5">
-        <CounterButtons />
+        <ActivityButtons />
 
         <QuickAdd defaultDue={today} />
 

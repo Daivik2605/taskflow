@@ -28,10 +28,10 @@ do $$ declare n int; begin
   if n <> 18 then raise exception 'expected 18 updated_at triggers, found %', n; end if;
   select count(*) into n from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public'
      and tablename in ('taskflow_tasks','taskflow_sessions','taskflow_session_segments','taskflow_resets',
-                       'taskflow_shifts','taskflow_shift_breaks','taskflow_notes','taskflow_counters','taskflow_counter_events');
-  if n <> 9 then raise exception 'expected 9 tables in realtime publication, found %', n; end if;
+                       'taskflow_shifts','taskflow_shift_breaks','taskflow_notes','taskflow_counters','taskflow_counter_events','taskflow_presets');
+  if n <> 10 then raise exception 'expected 10 tables in realtime publication, found %', n; end if;
   select count(*) into n from pg_publication_tables where pubname = 'supabase_realtime';
-  if n <> 9 then raise exception 'publication holds % tables, expected 9', n; end if;
+  if n <> 10 then raise exception 'publication holds % tables, expected 10', n; end if;
   select count(*) into n from information_schema.columns where table_name = 'taskflow_jobs'
      and column_name in ('hourly_rate','pay_period_anchor') and is_nullable = 'YES';
   if n <> 2 then raise exception 'hourly_rate and pay_period_anchor must be nullable'; end if;

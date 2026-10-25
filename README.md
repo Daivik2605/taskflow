@@ -37,12 +37,12 @@ The app code for phase 2.5 needs the new tables and columns. Until you run this 
 2. Supabase → SQL Editor → New query → paste the **whole** of `supabase/taskflow_schema.sql` → Run. It needs Postgres 15 or newer (every current Supabase project is); on an older one it stops before changing anything. It's safe to run again — the migration part only runs once.
 3. Then `npm run dev` and sign in.
 
-**What the migration does to your data** (in place, same ids, so tasks, presets, projects and jobs keep their links): DSA, Trading, SQL → Study; Tableau cert and Databricks cert → Study / *Tableau Data Analyst Certification*, *Databricks Data Analyst Certification*; AEO Studio → Hustle; Work — Tim Hortons → Work / Tim Hortons; Wellbeing → Wellness; Life admin → Personal; Sleep stays. Projects, Leisure and People are archived and their tasks, presets, sessions and notes move to Personal, Break and Break. New: the parents Work, Hustle, Study, Break; the sub-tags Oland Stations, Commute, Kriya, Padmasadna, Home Workout, Gym; the presets *Sudarshan Kriya* and *Padmasadhna* become **Kriya** and **Padmasadna** under Wellness; a second job **Oland Stations** (no rate or pay period yet) and its shift button; the counters **Cigarette 🚬** and **Weed 🌿**. Tags you created yourself stay as top-level tags (their kind is mapped); if one has the same name as a new sub-tag it is reused and its tasks keep their link. Existing tasks get **no** start date.
+**What the migration does to your data** (in place, same ids, so tasks, presets, projects and jobs keep their links): DSA, Trading, SQL → Study; Tableau cert and Databricks cert → Study / *Tableau Data Analyst Certification*, *Databricks Data Analyst Certification*; AEO Studio → Hustle; Work — Tim Hortons → Work / Tim Hortons; Wellbeing → Wellness; Life admin → Personal; Sleep stays. Projects, Leisure and People are archived and their tasks, presets, sessions and notes move to Personal, Break and Break. New: the parents Work, Hustle, Study, Break; the sub-tags Oland Stations, Commute, Kriya, Padmasadna, Home Workout, Gym; the presets *Sudarshan Kriya* and *Padmasadhna* become **Kriya** and **Padmasadna** under Wellness; a second job **Oland Stations** (no rate or pay period yet) and its shift button; the counters **Cigarette** and **Weed**. Tags you created yourself stay as top-level tags (their kind is mapped); if one has the same name as a new sub-tag it is reused and its tasks keep their link. Existing tasks get **no** start date.
 
 **What to check afterwards** — paste into the SQL Editor (read-only):
 ```sql
 -- the tag tree: parents first, each followed by its sub-tags
-select coalesce(p.name, '—') as parent, a.name, a.kind, a.emoji, a.archived
+select coalesce(p.name, '—') as parent, a.name, a.kind, a.archived
 from taskflow_areas a left join taskflow_areas p on p.id = a.parent_id
 order by coalesce(p.sort, a.sort), (a.parent_id is not null), a.sort;
 
@@ -63,3 +63,19 @@ You should see: seven parents (Work, Hustle, Study, Wellness, Break, Sleep, Pers
 - **Today** starts with the two counter buttons: tap = +1 now with a 5-second **Undo**; long-press (or the … button) adds a tap at a past time (Toronto time) or edits today's taps.
 - **Settings → Tags** is the tree editor (add parent / sub-tag, rename, colour, emoji, reorder, move, archive, merge). **Settings → Counters** adds more counters. **Settings → Week starts on** sets what "this week" means.
 - A task's **When**: *No date*, *On a day*, *Window* (This week · Next 7 days · Next 2 weeks · This month · custom) or *Deadline* (hard, optional "start working from"). A task with a due date and no start day (made before phase 2.5) is active now and shows "N days left".
+
+## Phase 2.7: run the SQL (revision 4: simplify)
+The app code for phase 2.7 needs three new columns and one function. Until you run this it shows the banner "The database is out of date".
+
+1. Supabase → SQL Editor → New query → paste the **whole** of `supabase/taskflow_schema.sql` → Run. It only adds things, never deletes, and is safe to run again. (A second run does **not** re-flag a tag you un-ticked under "Offer on tasks".)
+2. What it does, once: adds `taskflow_counters.short_label` (**Cig**, **Weed**), `taskflow_presets.weekly_target`, `taskflow_areas.show_for_tasks`; adds the sub-tag **Hustle / Projects**; ticks "Offer on tasks" for Oland Stations, Commute, AEO Studio, Projects, Study and Trading only; adds the activities **Home Workout** (30 min) and **Gym** (60 min) next to Kriya and Padmasadna (their ids and minutes are kept); adds the function `taskflow_log_activity` (security invoker, granted to `authenticated`) that the activity buttons call.
+3. Then `npm run dev` and tap through every screen.
+
+**What to check afterwards** (read-only, paste into the SQL Editor):
+```sql
+select name, short_label from taskflow_counters order by sort;                       -- Cigarette Cig · Weed Weed
+select name, default_minutes, weekly_target from taskflow_presets order by sort;     -- Kriya 35 · Padmasadna 20 · Home Workout 30 · Gym 60
+select coalesce(p.name || ' › ' || a.name, a.name) as tag from taskflow_areas a
+  left join taskflow_areas p on p.id = a.parent_id where a.show_for_tasks order by 1;  -- exactly six rows
+select proname, prosecdef from pg_proc where proname = 'taskflow_log_activity';      -- prosecdef = false (security invoker)
+```
