@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthGate } from './app/AuthGate'
 import { Shell } from './app/Shell'
 import { DataProviders } from './data/DataProviders'
+import { Capture } from './screens/Capture'
 import { More } from './screens/More'
 import { Settings } from './screens/Settings'
 import { Tasks } from './screens/Tasks'
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="inbox" element={<Inbox />} />
             <Route path="projects" element={<Projects />} />
             <Route path="work" element={<Work />} />
+            <Route path="capture" element={<Capture />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useConnection } from '../app/connection'
 import { useToast } from '../app/toast'
+import { urlToRecord } from '../pwa/publicUrl'
 import { db, friendlyDbError } from './db'
 
 export interface SettingsApi {
@@ -20,10 +21,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
     const load = async () => {
-      const { data, error } = await db().from('taskflow_settings').select('week_starts_on').maybeSingle()
+      const { data, error } = await db().from('taskflow_settings').select('week_starts_on,taskflow_url').maybeSingle()
       if (cancelled) return
-      if (error) reportError(friendlyDbError(error))
-      else if (data) setWeek((data as { week_starts_on: number }).week_starts_on)
+      if (error) { reportError(friendlyDbError(error)); return }
+      if (!data) return
+      const row = data as { week_starts_on: number; taskflow_url: string | null }
+      setWeek(row.week_starts_on)
+      // Remember the deployed address once, from whichever device opens it first (never localhost, a LAN address or a preview URL).
+      const url = urlToRecord(window.location.origin, row.taskflow_url)
+      if (url) await db().from('taskflow_settings').update({ taskflow_url: url }).not('id', 'is', null)
     }
     void load()
     const onVisible = () => { if (document.visibilityState === 'visible') void load() }

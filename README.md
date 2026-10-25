@@ -2,7 +2,7 @@
 
 Tasks, timer, shifts and pay, nap + reset, calendar with days off, inbox and project briefs — one app of PersonalOS. Used on Mac and iPhone. Spec: `docs/SPEC.md`; phases: `docs/BUILD_PLAN.md`; rules for Claude Code: `CLAUDE.md`.
 
-Status: **phase 2.5** — tags (a two-level tree), task dates (day / window / deadline), cigarette and weed counters, Insights, Today and Tasks views, realtime sync. Timer, calendar, inbox, projects and work are placeholders until their phases.
+Status: **phase 3 (deployable PWA; see docs/DEPLOY.md)** — tags (a two-level tree), task dates (day / window / deadline), cigarette and weed counters, Insights, Today and Tasks views, realtime sync. Timer, calendar, inbox, projects and work are placeholders until their phases.
 
 ## Setup
 1. `npm install`
@@ -93,4 +93,7 @@ select count(*) from taskflow_goals;                                            
 select name, reasons from taskflow_counters order by sort;                            -- Cigarette and Weed: the six reasons
 select column_name from information_schema.columns where table_name = 'taskflow_counter_events' and column_name = 'reason';  -- one row
 ```
+
+## Phase 3: deployed + installable (PWA)
+Production: `https://taskflow.jarvisjr.daivik.dev` (Vercel project `taskflow`; DNS at Hostinger). The click-by-click steps, the DNS record, the Supabase settings (redirect URL, sign-ups off), installing on iPhone and Mac, and the check list are in **`docs/DEPLOY.md`**. Env vars on Vercel: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (anon key only; redeploy after changing). No SQL to run in this phase.
 
