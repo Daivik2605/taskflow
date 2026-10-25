@@ -2,6 +2,12 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useToday } from '../app/useToday'
 import { useCounters } from '../data/counters'
+import { useActivities } from '../data/activities'
+import { useAreas } from '../data/areas'
+import { useGoalInputs } from '../data/goalInputs'
+import { useGoals } from '../data/goals'
+import { currentProgress, goalTitle, PERIOD_LABEL } from '../lib/goals'
+import { GoalBar } from './GoalBar'
 import { counterLabel } from '../lib/counters'
 import { useSettings } from '../data/settings'
 import { useTasks } from '../data/tasks'
@@ -35,6 +41,38 @@ function OverviewCard({ label, to, value, sub, aria, now, tone = '' }: CardProps
 }
 
 const Skeleton = () => <div className={`${card} min-h-20 animate-pulse bg-slate-100 lg:flex-1 dark:bg-slate-800`} aria-hidden="true" />
+
+/** The Goals row: every active goal's progress in its own current period, so a weekly gym target is visible on the Today view too. */
+function GoalsRow() {
+  const today = useToday()
+  const { goals, loading } = useGoals()
+  const { areas } = useAreas()
+  const { counters } = useCounters()
+  const { activities } = useActivities()
+  const inputs = useGoalInputs()
+  const rows = useMemo(() => currentProgress(goals, inputs, today), [goals, inputs, today])
+  if (loading) return null
+  const lists = { areas, counters, activities }
+  return (
+    <div className={`${card} p-3`} role="group" aria-label="Goals">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Goals</h2>
+        <Link to="/insights?tab=goals" className="text-xs text-indigo-600 dark:text-indigo-400">Hit rate and streaks</Link>
+      </div>
+      {rows.length === 0
+        ? <p className="text-sm text-slate-500">No goals yet. <Link to="/settings#goals" className="text-indigo-600 dark:text-indigo-400">Set one in Settings</Link>.</p>
+        : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {rows.map(({ goal, result, dayOff }) => (
+              <GoalBar key={goal.series_id} title={goalTitle(goal, lists)} metric={goal.metric} direction={goal.direction}
+                result={dayOff ? { ...result, status: 'off' } : result}
+                hint={goal.metric === 'tag_minutes' && result.value === 0 ? `Fills from activities and, once it exists, the timer — this ${PERIOD_LABEL[goal.period]}` : undefined} />
+            ))}
+          </div>
+        )}
+    </div>
+  )
+}
 
 /** SPEC §3 overview strip: Today · Week · Month cards. Every figure comes from lib/overview.ts, i.e. the same functions as Insights. */
 export function OverviewStrip({ children }: { children?: ReactNode }) { // children: the phase-4 Time card goes here
@@ -82,6 +120,7 @@ export function OverviewStrip({ children }: { children?: ReactNode }) { // child
         ))}
         {children}
       </div>
+      {!tasksLoading && !countersLoading && <GoalsRow />}
     </section>
   )
 }

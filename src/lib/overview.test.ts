@@ -6,11 +6,11 @@ import { OVERVIEW_LINKS, deadlineLabel, overview, previousWindow, type Period } 
 import { rangeStats, counts } from './tasks'
 
 const TODAY = '2026-11-10' // Tuesday
-const cig: Counter = { id: 'c1', name: 'Cigarette', short_label: 'Cig', color: '#000', sort: 0, archived: false }
-const weed: Counter = { id: 'c2', name: 'Weed', short_label: 'Weed', color: '#0a0', sort: 1, archived: false }
-const old: Counter = { id: 'c3', name: 'Old', short_label: null, color: '#000', sort: 2, archived: true }
+const cig: Counter = { id: 'c1', name: 'Cigarette', short_label: 'Cig', color: '#000', sort: 0, archived: false, reasons: null }
+const weed: Counter = { id: 'c2', name: 'Weed', short_label: 'Weed', color: '#0a0', sort: 1, archived: false, reasons: null }
+const old: Counter = { id: 'c3', name: 'Old', short_label: null, color: '#000', sort: 2, archived: true, reasons: null }
 let n = 0
-const ev = (day: string, counter_id = 'c1', qty = 1): CounterEvent => ({ id: `e${++n}`, counter_id, at: `${day}T15:00:00.000Z`, day, qty, note: null })
+const ev = (day: string, counter_id = 'c1', qty = 1): CounterEvent => ({ id: `e${++n}`, counter_id, at: `${day}T15:00:00.000Z`, day, qty, note: null, reason: null })
 
 const tasks = [
   task({ title: 'Missed A', start_on: '2026-11-03', due_on: '2026-11-03' }), // missed, last week

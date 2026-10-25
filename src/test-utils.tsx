@@ -8,6 +8,8 @@ import { TaskSheetProvider } from './components/TaskSheet'
 import { AreasContext, type AreasApi } from './data/areas'
 import { ActivitiesContext, type ActivitiesApi } from './data/activities'
 import { CountersContext, type CountersApi } from './data/counters'
+import { GoalsContext, type GoalsApi } from './data/goals'
+import type { Goal } from './lib/goals'
 import { ProjectsContext } from './data/projects'
 import { SettingsContext } from './data/settings'
 import { TasksContext, type TasksApi } from './data/tasks'
@@ -28,8 +30,8 @@ export const AREAS: Area[] = [
 ]
 
 export const COUNTERS: Counter[] = [
-  { id: 'c-cig', name: 'Cigarette', short_label: 'Cig', color: '#6b7280', sort: 0, archived: false },
-  { id: 'c-weed', name: 'Weed', short_label: 'Weed', color: '#22c55e', sort: 1, archived: false },
+  { id: 'c-cig', name: 'Cigarette', short_label: 'Cig', color: '#6b7280', sort: 0, archived: false, reasons: ['bored', 'stress'] },
+  { id: 'c-weed', name: 'Weed', short_label: 'Weed', color: '#22c55e', sort: 1, archived: false, reasons: null },
 ]
 
 export function fakeTasksApi(tasks: Task[], over: Partial<TasksApi> = {}): TasksApi {
@@ -50,7 +52,7 @@ export function fakeAreasApi(areas: Area[], over: Partial<AreasApi> = {}): Areas
 export function fakeCountersApi(counters: Counter[] = COUNTERS, events: CounterEvent[] = [], over: Partial<CountersApi> = {}): CountersApi {
   return {
     counters, events, loading: false,
-    tap: vi.fn(async () => null), removeEvent: vi.fn(async () => true), editEvent: vi.fn(async () => true),
+    tap: vi.fn(async () => null), removeEvent: vi.fn(async () => true), setReason: vi.fn(async () => true), editEvent: vi.fn(async () => true),
     addCounter: vi.fn(async () => null), updateCounter: vi.fn(async () => null), reorderCounters: vi.fn(async () => true), ...over,
   }
 }
@@ -68,7 +70,15 @@ export function fakeActivitiesApi(activities: Activity[] = ACTIVITIES, logs: Act
   }
 }
 
+export function fakeGoalsApi(goals: Goal[] = [], over: Partial<GoalsApi> = {}): GoalsApi {
+  return {
+    goals, daysOff: new Set(), loading: false,
+    add: vi.fn(async () => null), edit: vi.fn(async () => null), setPaused: vi.fn(async () => null), remove: vi.fn(async () => true), reorder: vi.fn(async () => true), ...over,
+  }
+}
+
 interface Opts {
+  goals?: Goal[]; goalsApi?: GoalsApi
   tasks?: Task[]; api?: TasksApi
   areas?: Area[]; areasApi?: AreasApi
   counters?: Counter[]; events?: CounterEvent[]; countersApi?: CountersApi
@@ -80,6 +90,7 @@ export function renderApp(ui: ReactElement, o: Opts = {}) {
   const tasksApi = o.api ?? fakeTasksApi(o.tasks ?? [])
   const areasApi = o.areasApi ?? fakeAreasApi(o.areas ?? AREAS)
   const countersApi = o.countersApi ?? fakeCountersApi(o.counters ?? COUNTERS, o.events ?? [])
+  const goalsApi = o.goalsApi ?? fakeGoalsApi(o.goals ?? [])
   const activitiesApi = o.activitiesApi ?? fakeActivitiesApi(o.activities ?? [], o.logs ?? [])
   const utils = render(
     <ConnectionProvider>
@@ -90,9 +101,11 @@ export function renderApp(ui: ReactElement, o: Opts = {}) {
               <ProjectsContext.Provider value={[{ id: 'p-aeo', name: 'AEO Studio', status: 'active' }]}>
                 <CountersContext.Provider value={countersApi}>
                   <ActivitiesContext.Provider value={activitiesApi}>
-                    <TasksContext.Provider value={tasksApi}>
-                      <TaskSheetProvider>{ui}</TaskSheetProvider>
-                    </TasksContext.Provider>
+                    <GoalsContext.Provider value={goalsApi}>
+                      <TasksContext.Provider value={tasksApi}>
+                        <TaskSheetProvider>{ui}</TaskSheetProvider>
+                      </TasksContext.Provider>
+                    </GoalsContext.Provider>
                   </ActivitiesContext.Provider>
                 </CountersContext.Provider>
               </ProjectsContext.Provider>
@@ -102,7 +115,7 @@ export function renderApp(ui: ReactElement, o: Opts = {}) {
       </MemoryRouter>
     </ConnectionProvider>,
   )
-  return { ...utils, tasksApi, areasApi, countersApi, activitiesApi }
+  return { ...utils, tasksApi, areasApi, countersApi, activitiesApi, goalsApi }
 }
 
 /** jsdom has no <dialog> behaviour yet. */

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Icon } from '../../app/Icon'
 import { useConnection } from '../../app/connection'
 import { TagLabel } from '../../components/TagLabel'
@@ -60,6 +61,8 @@ function Editor({ tag, onDone }: { tag: Area; onDone: () => void }) {
         </label>
       )}
       {hasChildren && <p className="text-sm text-slate-500">This tag has sub-tags, so it stays top-level.</p>}
+
+      <Link to={`/settings?goal=tag_minutes:${tag.id}`} className="inline-block text-sm text-indigo-600 dark:text-indigo-400">Set a time goal for {tag.name} →</Link>
 
       <div className="space-y-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/50">
         {activeChildren && <p className="text-sm text-slate-500">To merge this tag into another, first move or archive its sub-tags.</p>}

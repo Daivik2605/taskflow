@@ -929,3 +929,59 @@ begin
     alter publication supabase_realtime add table public.taskflow_presets;
   end if;
 end $$;
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════════
+-- Phase 2.8: goals (versioned), counter reasons.
+-- Idempotent: safe to re-run. Nothing is dropped.
+-- ═════════════════════════════════════════════════════════════════════════════════════════════
+
+-- A goal row is one VERSION. Editing the target closes the old row (ends_on) and inserts a new one with the same series_id,
+-- so past periods are judged against the target they had then.
+create table if not exists public.taskflow_goals (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  series_id   uuid not null default gen_random_uuid(),
+  name        text not null default '',
+  metric      text not null check (metric in ('tag_minutes','counter_count','activity_count','tasks_done')),
+  target_id   uuid,                                   -- tag, counter or activity (null for tasks_done); no FK: it spans three tables and a goal outlives an archived target
+  direction   text not null check (direction in ('at_least','at_most')),
+  amount      int  not null check (amount > 0),       -- minutes for tag_minutes, otherwise a count
+  period      text not null check (period in ('day','week','month')),
+  starts_on   date not null,
+  ends_on     date,
+  paused      boolean not null default false,
+  sort        int  not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  check (ends_on is null or ends_on >= starts_on),
+  check ((metric = 'tasks_done') = (target_id is null))
+);
+create index if not exists taskflow_goals_user_series on public.taskflow_goals (user_id, series_id);
+
+do $$
+begin
+  drop trigger if exists taskflow_set_updated_at on public.taskflow_goals;
+  create trigger taskflow_set_updated_at before update on public.taskflow_goals
+    for each row execute function public.taskflow_set_updated_at();
+  alter table public.taskflow_goals enable row level security;
+  drop policy if exists "own rows" on public.taskflow_goals;
+  create policy "own rows" on public.taskflow_goals for all to authenticated
+    using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+  grant select, insert, update, delete on public.taskflow_goals to authenticated;
+end $$;
+
+-- Counter reasons: an editable list per counter, and the reason picked after a tap (optional).
+alter table public.taskflow_counters       add column if not exists reasons text[];
+alter table public.taskflow_counter_events add column if not exists reason  text;
+-- Defaults for the two seeded counters, once: only where the list was never set (null), so a list you empty later stays empty.
+update public.taskflow_counters
+   set reasons = array['after shift','bored','social','stress','after meal','with coffee']
+ where reasons is null and name in ('Cigarette','Weed');
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'taskflow_goals') then
+    alter publication supabase_realtime add table public.taskflow_goals;
+  end if;
+end $$;

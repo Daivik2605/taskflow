@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../app/auth'
 import { ActivitiesSettings } from './settings/ActivitiesSettings'
 import { CountersSettings } from './settings/CountersSettings'
+import { GoalsSettings } from './settings/GoalsSettings'
 import { TagsSettings } from './settings/TagsSettings'
 import { useSettings } from '../data/settings'
 import { select, sectionTitle } from '../components/ui'
@@ -49,6 +50,7 @@ export function Settings() {
         <p className="mt-1 text-xs text-slate-500">Used by “This week” windows, the week counters and Insights.</p>
       </div>
 
+      <GoalsSettings />
       <TagsSettings />
       <ActivitiesSettings />
       <CountersSettings />

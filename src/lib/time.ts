@@ -48,6 +48,11 @@ export function dayOf(instant: Instant): Day {
   return `${pad(p.year, 4)}-${pad(p.month)}-${pad(p.day)}`
 }
 
+/** The Toronto hour (0–23) of a moment. */
+export function hourOf(instant: Instant): number {
+  return torontoParts(toDate(instant)).hour
+}
+
 /** Today's Toronto date. `now` is injectable for tests. */
 export function todayToronto(now: Instant = new Date()): Day {
   return dayOf(now)

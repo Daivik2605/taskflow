@@ -1,13 +1,13 @@
 // Counters (SPEC §13): cigarettes, weed — counts only, no time, no cost. Every figure here is a pure function of the event
 // list, with days taken from each event's stored Toronto `day` (the database keeps it in step with `at`).
 
-import { addDays, addMonths, dayOf, diffDays, formatDay, formatDuration, formatMonth, monthBounds, weekBounds, type Day, type Instant } from './time'
+import { addDays, addMonths, dayOf, diffDays, formatDay, formatDuration, formatMonth, hourOf, monthBounds, weekBounds, type Day, type Instant } from './time'
 
-export interface Counter { id: string; name: string; short_label: string | null; color: string; sort: number; archived: boolean }
+export interface Counter { id: string; name: string; short_label: string | null; color: string; sort: number; archived: boolean; reasons: string[] | null }
 
 /** What the header pills and tight spaces show: the short label, or the full name when there is none. */
 export const counterLabel = (c: Pick<Counter, 'name' | 'short_label'>) => c.short_label?.trim() || c.name
-export interface CounterEvent { id: string; counter_id: string; at: string; day: Day; qty: number; note: string | null }
+export interface CounterEvent { id: string; counter_id: string; at: string; day: Day; qty: number; note: string | null; reason: string | null }
 
 export const byCounterSort = (a: Counter, b: Counter) => a.sort - b.sort || a.name.localeCompare(b.name)
 export const activeCounters = (cs: Counter[]) => cs.filter((c) => !c.archived).sort(byCounterSort)
@@ -22,8 +22,8 @@ export function validateCounterName(name: string, cs: Counter[], ignoreId?: stri
 }
 
 /** A new event for a tap: `at` is the tap time (or the past time the user chose), `day` its Toronto day. */
-export function buildEvent(counterId: string, at: Date, id: string, qty = 1, note: string | null = null): CounterEvent {
-  return { id, counter_id: counterId, at: at.toISOString(), day: dayOf(at), qty, note }
+export function buildEvent(counterId: string, at: Date, id: string, qty = 1, note: string | null = null, reason: string | null = null): CounterEvent {
+  return { id, counter_id: counterId, at: at.toISOString(), day: dayOf(at), qty, note, reason }
 }
 
 export const forCounter = (events: CounterEvent[], counterId: string) => events.filter((e) => e.counter_id === counterId)
@@ -124,4 +124,71 @@ export function applyEventChange(events: CounterEvent[], c: EventChange): Counte
   const next = [...events]
   next[i] = c.row
   return next
+}
+
+// ───────────── Reasons (SPEC §17): an optional label per tap, from an editable list per counter ─────────────
+export const MAX_REASONS = 12
+export const MAX_REASON_LENGTH = 24
+
+/** Trims, drops empties and case-insensitive duplicates, keeps order. */
+export function cleanReasons(list: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const r of list) {
+    const t = r.trim()
+    if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); out.push(t) }
+  }
+  return out
+}
+
+/** A message, or null when `reasons` can be saved. */
+export function validateReasons(reasons: string[]): string | null {
+  const clean = cleanReasons(reasons)
+  if (clean.length > MAX_REASONS) return `At most ${MAX_REASONS} reasons.`
+  if (clean.some((r) => r.length > MAX_REASON_LENGTH)) return `A reason can be at most ${MAX_REASON_LENGTH} characters.`
+  return null
+}
+
+/** Taps per reason (by quantity), most used first; taps with no reason are counted apart. */
+export function reasonCounts(events: CounterEvent[]): { reasons: { reason: string; count: number }[]; none: number } {
+  const m = new Map<string, number>()
+  let none = 0
+  for (const e of events) {
+    if (e.reason) m.set(e.reason, (m.get(e.reason) ?? 0) + e.qty)
+    else none += e.qty
+  }
+  return { reasons: [...m].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason)), none }
+}
+
+/** Taps per Toronto hour of day (24 buckets, index = hour). Pass `reason` to count only taps with that reason. */
+export function byHourOfDay(events: CounterEvent[], reason?: string): number[] {
+  const out = Array<number>(24).fill(0)
+  for (const e of events) if (reason === undefined || e.reason === reason) out[hourOf(e.at)] += e.qty
+  return out
+}
+
+// ───────────── Gaps between taps ─────────────
+// Gaps are waking gaps: the time between two taps on the SAME Toronto day, plus (for today) the gap still running since the last tap.
+// The overnight gap is not counted — it would always be the longest and tell you nothing.
+
+/** Longest gap in minutes on `day`, or null if that day has fewer than two taps (and no running gap). `now` closes today's running gap. */
+export function longestGap(events: CounterEvent[], day: Day, now: Instant): number | null {
+  const times = events.filter((e) => e.day === day).map((e) => new Date(e.at).getTime()).sort((a, b) => a - b)
+  if (times.length === 0) return null
+  if (dayOf(now) === day) times.push(Math.max(new Date(now).getTime(), times[times.length - 1]))
+  if (times.length < 2) return null
+  let best = 0
+  for (let i = 1; i < times.length; i++) best = Math.max(best, (times[i] - times[i - 1]) / 60_000)
+  return Math.floor(best)
+}
+
+/** Best (longest) gap in minutes over the week containing `today`, up to today. Null if no day had a gap. */
+export function bestGapThisWeek(events: CounterEvent[], today: Day, now: Instant, weekStart = 1): number | null {
+  const w = weekBounds(today, weekStart)
+  let best: number | null = null
+  for (let d = w.start; d <= today; d = addDays(d, 1)) {
+    const g = longestGap(events, d, now)
+    if (g !== null && (best === null || g > best)) best = g
+  }
+  return best
 }

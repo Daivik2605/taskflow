@@ -79,3 +79,18 @@ select coalesce(p.name || ' › ' || a.name, a.name) as tag from taskflow_areas 
   left join taskflow_areas p on p.id = a.parent_id where a.show_for_tasks order by 1;  -- exactly six rows
 select proname, prosecdef from pg_proc where proname = 'taskflow_log_activity';      -- prosecdef = false (security invoker)
 ```
+
+## Phase 2.8: run the SQL (goals, limits, reasons)
+The app code for phase 2.8 needs one new table and two new columns. Until you run this it shows the banner "The database is out of date".
+
+1. Supabase → SQL Editor → New query → paste the **whole** of `supabase/taskflow_schema.sql` → Run. It only adds things, never deletes, and is safe to run again.
+2. What it does, once: creates `taskflow_goals` (a row per version of a goal), adds `taskflow_counters.reasons` and `taskflow_counter_events.reason`, and gives Cigarette and Weed the default reasons (after shift · bored · social · stress · after meal · with coffee) only if they have none yet. A reasons list you empty later stays empty.
+3. Then `npm run dev`: Settings → Goals → add "Cigarette at most 5 per day" and "Gym at least 3 times per week".
+
+**What to check afterwards** (read-only):
+```sql
+select count(*) from taskflow_goals;                                                  -- 0 until you add goals
+select name, reasons from taskflow_counters order by sort;                            -- Cigarette and Weed: the six reasons
+select column_name from information_schema.columns where table_name = 'taskflow_counter_events' and column_name = 'reason';  -- one row
+```
+

@@ -66,7 +66,7 @@ describe('OverviewStrip', () => {
     expect(document.querySelectorAll('.animate-pulse')).toHaveLength(8)
   })
   it('tapping a counter updates its card at once, with the change vs yesterday', async () => {
-    const ev = (day: string): CounterEvent => ({ id: `e-${day}-${Math.random()}`, counter_id: 'c-cig', at: `${day}T15:00:00.000Z`, day, qty: 1, note: null })
+    const ev = (day: string): CounterEvent => ({ id: `e-${day}-${Math.random()}`, counter_id: 'c-cig', at: `${day}T15:00:00.000Z`, day, qty: 1, note: null, reason: null })
     function Harness() {
       const [events, setEvents] = useState<CounterEvent[]>([ev('2026-11-09'), ev('2026-11-09')])
       const api = fakeCountersApi(COUNTERS, events, {

@@ -4,6 +4,7 @@ import { TaskSheetProvider } from '../components/TaskSheet'
 import { ActivitiesProvider } from './activities'
 import { AreasProvider } from './areas'
 import { CountersProvider } from './counters'
+import { GoalsProvider } from './goals'
 import { ProjectsProvider } from './projects'
 import { SettingsProvider } from './settings'
 import { TasksProvider } from './tasks'
@@ -17,9 +18,11 @@ export function DataProviders({ children }: { children: ReactNode }) {
           <ProjectsProvider>
             <CountersProvider>
               <ActivitiesProvider>
-                <TasksProvider>
-                  <TaskSheetProvider>{children}</TaskSheetProvider>
-                </TasksProvider>
+                <GoalsProvider>
+                  <TasksProvider>
+                    <TaskSheetProvider>{children}</TaskSheetProvider>
+                  </TasksProvider>
+                </GoalsProvider>
               </ActivitiesProvider>
             </CountersProvider>
           </ProjectsProvider>

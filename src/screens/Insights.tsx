@@ -12,13 +12,17 @@ import { useSettings } from '../data/settings'
 import { useTasks } from '../data/tasks'
 import { logDay, logMinutes, minutesByTag } from '../lib/activities'
 import { buildTree } from '../lib/tags'
-import { activeCounters, counterLabel, counterStats, forCounter, perDay, perMonth, perWeek, sumQty, totalBetween, type Bucket, type Counter } from '../lib/counters'
+import { activeCounters, byHourOfDay, counterLabel, counterStats, forCounter, perDay, perMonth, perWeek, reasonCounts, sumQty, totalBetween, type Bucket, type Counter, type CounterEvent } from '../lib/counters'
+import { GoalBar } from '../components/GoalBar'
+import { useGoalInputs } from '../data/goalInputs'
+import { useGoals } from '../data/goals'
+import { goalStats, goalTitle, liveGoals, periodLabel, PERIOD_LABEL, LOOKBACK } from '../lib/goals'
 import { reachesToday, resolveRange, stepAnchor, daysIn, type RangeKind } from '../lib/insights'
 import { completedOn, isDoneLate, rangeStats, taskChips, type Task } from '../lib/tasks'
-import { formatDay, formatDuration, formatTime, type Day } from '../lib/time'
+import { addDays, formatDay, formatDuration, formatTime, type Day } from '../lib/time'
 
-type Tab = 'day' | 'range' | 'counters'
-const TABS: { key: Tab; label: string }[] = [{ key: 'day', label: 'Day' }, { key: 'range', label: 'Range' }, { key: 'counters', label: 'Counters' }]
+type Tab = 'day' | 'range' | 'counters' | 'goals'
+const TABS: { key: Tab; label: string }[] = [{ key: 'day', label: 'Day' }, { key: 'range', label: 'Range' }, { key: 'counters', label: 'Counters' }, { key: 'goals', label: 'Goals' }]
 const isTab = (v: string | null): v is Tab => TABS.some((t) => t.key === v)
 
 export default function Insights() {
@@ -40,6 +44,7 @@ export default function Insights() {
       {tab === 'day' && <DayLog />}
       {tab === 'range' && <RangeView />}
       {tab === 'counters' && <CounterStats />}
+      {tab === 'goals' && <GoalsInsights />}
     </section>
   )
 }
@@ -276,6 +281,8 @@ function CounterStats() {
         ))}
       </dl>
 
+      <Reasons key={current.id} counter={current} events={mine} today={today} />
+
       <BarsChart title="Per day · last 30 days" data={perDay(mine, today, 30)} color={current.color} />
       <BarsChart title="Per week · last 12 weeks" data={perWeek(mine, today, 12, weekStartsOn)} color={current.color} />
       <BarsChart title="Per month · last 12 months" data={perMonth(mine, today, 12)} color={current.color} />
@@ -283,3 +290,91 @@ function CounterStats() {
   )
 }
 
+
+// ───────────── Reasons ─────────────
+type Scope = '30' | 'all'
+
+/** Why the taps happened (only taps where a reason was picked say why), and when in the day. Pick a reason to see its hours. */
+function Reasons({ counter, events, today }: { counter: Counter; events: CounterEvent[]; today: Day }) {
+  const [scope, setScope] = useState<Scope>('30')
+  const [reason, setReason] = useState<string | null>(null)
+  const inScope = useMemo(() => (scope === 'all' ? events : events.filter((e) => e.day >= addDays(today, -29) && e.day <= today)), [events, scope, today])
+  const { reasons, none } = useMemo(() => reasonCounts(inScope), [inScope])
+  const hours: Bucket[] = useMemo(() => byHourOfDay(inScope, reason ?? undefined).map((total, h) => ({ key: String(h), label: `${h}`, from: today, to: today, total })), [inScope, reason, today])
+  const max = Math.max(1, ...reasons.map((r) => r.count))
+  const tagged = reasons.reduce((n, r) => n + r.count, 0)
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-500">Reasons</h3>
+        <div role="radiogroup" aria-label="Reasons period" className="flex gap-1">
+          {([['30', 'Last 30 days'], ['all', 'All time']] as const).map(([k, l]) => (
+            <button key={k} type="button" role="radio" aria-checked={scope === k} onClick={() => setScope(k)}
+              className={`min-h-9 rounded-full border px-3 text-xs font-medium ${scope === k ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' : 'border-slate-300 dark:border-slate-700'}`}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {tagged === 0 ? (
+        <p className={`${card} p-3 text-sm text-slate-500`}>No reasons picked yet. After a tap, a row of reason chips shows up for a few seconds; picking one is optional.</p>
+      ) : (
+        <ul className={`${card} space-y-2 p-3`} aria-label="Taps by reason">
+          {reasons.map((r) => (
+            <li key={r.reason}>
+              <button type="button" aria-pressed={reason === r.reason} onClick={() => setReason(reason === r.reason ? null : r.reason)} className="block w-full text-left">
+                <div className="flex justify-between text-sm"><span className={reason === r.reason ? 'font-semibold' : ''}>{r.reason}</span><span className="tabular-nums text-slate-500">{r.count}</span></div>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" aria-hidden="true"><div className="h-full rounded-full" style={{ width: `${(r.count / max) * 100}%`, background: counter.color }} /></div>
+              </button>
+            </li>
+          ))}
+          {none > 0 && <li className="text-xs text-slate-500">{none} with no reason picked</li>}
+        </ul>
+      )}
+      <BarsChart title={`By hour of day${reason ? ` · ${reason}` : ''} · ${scope === 'all' ? 'all time' : 'last 30 days'}`} data={hours} color={counter.color} />
+      {reason && <button type="button" className={btn} onClick={() => setReason(null)}>Show all taps</button>}
+    </div>
+  )
+}
+
+// ───────────── Goals ─────────────
+function GoalsInsights() {
+  const today = useToday()
+  const { goals, loading } = useGoals()
+  const { areas } = useAreas()
+  const { counters } = useCounters()
+  const { activities } = useActivities()
+  const inputs = useGoalInputs()
+  const lists = { areas, counters, activities }
+  const live = useMemo(() => liveGoals(goals), [goals])
+  const stats = useMemo(() => live.map((g) => ({ g, s: goalStats(goals, g.series_id, inputs, today) })), [live, goals, inputs, today])
+
+  if (loading) return <p className="text-sm text-slate-500">Loading…</p>
+  if (live.length === 0) return <p className={`${card} p-3 text-sm text-slate-500`}>No goals yet. Set them in Settings → Goals.</p>
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">Hit rate and streak count finished days, weeks or months, each judged on the target it had then. Days off and paused stretches are skipped.</p>
+      {stats.map(({ g, s }) => (
+        <section key={g.series_id} className={`${card} space-y-3 p-3`} aria-label={goalTitle(g, lists)}>
+          {s.current && !g.paused
+            ? <GoalBar title={goalTitle(g, lists)} metric={g.metric} direction={g.direction} result={s.current.result} />
+            : <h3 className="text-sm font-medium">{goalTitle(g, lists)}{g.paused ? ' (paused)' : ''}</h3>}
+          <dl className="grid grid-cols-3 gap-2 text-center">
+            <div><dt className="text-xs text-slate-500">Hit rate</dt><dd className="text-xl font-bold" aria-label={`Hit rate: ${s.hitRate === null ? 'none yet' : `${Math.round(s.hitRate * 100)} percent`}`}>{s.hitRate === null ? '—' : `${Math.round(s.hitRate * 100)}%`}</dd><dd className="text-xs text-slate-500">{s.hits} of {s.total}</dd></div>
+            <div><dt className="text-xs text-slate-500">Streak</dt><dd className="text-xl font-bold">{s.streak}</dd><dd className="text-xs text-slate-500">{PERIOD_LABEL[g.period]}{s.streak === 1 ? '' : 's'} in a row</dd></div>
+            <div><dt className="text-xs text-slate-500">Best streak</dt><dd className="text-xl font-bold">{s.best}</dd><dd className="text-xs text-slate-500">last {LOOKBACK[g.period]} {PERIOD_LABEL[g.period]}s</dd></div>
+          </dl>
+          {s.history.length > 0 && (
+            <ul className="flex flex-wrap gap-1" aria-label="Recent periods, newest first">
+              {s.history.slice(0, 30).map((r) => (
+                <li key={r.window.from} title={`${periodLabel(g.period, r.window)}: ${r.result.value} vs ${r.version.amount}`}
+                  className={`flex h-6 min-w-6 items-center justify-center rounded text-[10px] font-bold ${r.result.status === 'hit' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+                  <span className="sr-only">{periodLabel(g.period, r.window)}: </span>{r.result.status === 'hit' ? 'Y' : 'N'}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ))}
+    </div>
+  )
+}

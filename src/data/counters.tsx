@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useConnection } from '../app/connection'
 import { useToast } from '../app/toast'
-import { applyEventChange, buildEvent, byCounterSort, nextCounterSort, validateCounterName, type Counter, type CounterEvent } from '../lib/counters'
+import { applyEventChange, buildEvent, byCounterSort, cleanReasons, nextCounterSort, validateCounterName, validateReasons, type Counter, type CounterEvent } from '../lib/counters'
 import { db, fetchAll, friendlyDbError } from './db'
 
 export interface CountersApi {
@@ -9,24 +9,26 @@ export interface CountersApi {
   events: CounterEvent[]
   loading: boolean
   /** One tap = one event at `at` (default now). Pass `id` to know the event before the save finishes (so Undo can be offered instantly). */
-  tap: (counterId: string, opts?: { at?: Date; qty?: number; note?: string | null; id?: string }) => Promise<CounterEvent | null>
+  tap: (counterId: string, opts?: { at?: Date; qty?: number; note?: string | null; reason?: string | null; id?: string }) => Promise<CounterEvent | null>
   removeEvent: (id: string) => Promise<boolean>
-  editEvent: (id: string, patch: { at?: Date; qty?: number; note?: string | null }) => Promise<boolean>
+  /** The optional reason chip after a tap; null clears it. */
+  setReason: (id: string, reason: string | null) => Promise<boolean>
+  editEvent: (id: string, patch: { at?: Date; qty?: number; note?: string | null; reason?: string | null }) => Promise<boolean>
   addCounter: (input: { name: string; short_label: string | null; color: string }) => Promise<string | null>
-  updateCounter: (id: string, patch: Partial<Pick<Counter, 'name' | 'short_label' | 'color' | 'archived'>>) => Promise<string | null>
+  updateCounter: (id: string, patch: Partial<Pick<Counter, 'name' | 'short_label' | 'color' | 'archived' | 'reasons'>>) => Promise<string | null>
   reorderCounters: (changes: { id: string; sort: number }[]) => Promise<boolean>
 }
 
 const empty: CountersApi = {
   counters: [], events: [], loading: false,
-  tap: async () => null, removeEvent: async () => false, editEvent: async () => false,
+  tap: async () => null, removeEvent: async () => false, setReason: async () => false, editEvent: async () => false,
   addCounter: async () => null, updateCounter: async () => null, reorderCounters: async () => false,
 }
 export const CountersContext = createContext<CountersApi>(empty)
 export const useCounters = () => useContext(CountersContext)
 
-const COUNTER_COLUMNS = 'id,name,short_label,color,sort,archived'
-const EVENT_COLUMNS = 'id,counter_id,at,day,qty,note'
+const COUNTER_COLUMNS = 'id,name,short_label,color,sort,archived,reasons'
+const EVENT_COLUMNS = 'id,counter_id,at,day,qty,note,reason'
 
 export function CountersProvider({ children }: { children: ReactNode }) {
   const { writesDisabled, reportError } = useConnection()
@@ -83,13 +85,13 @@ export function CountersProvider({ children }: { children: ReactNode }) {
 
   const tap = useCallback<CountersApi['tap']>(async (counterId, opts = {}) => {
     if (writesOff.current) { offline(); return null }
-    const { at = new Date(), qty = 1, note = null, id = crypto.randomUUID() } = opts
-    const ev = buildEvent(counterId, at, id, qty, note)
+    const { at = new Date(), qty = 1, note = null, reason = null, id = crypto.randomUUID() } = opts
+    const ev = buildEvent(counterId, at, id, qty, note, reason)
     setEvents((l) => [...l, ev])
-    const { error } = await db().from('taskflow_counter_events').insert({ id: ev.id, counter_id: ev.counter_id, at: ev.at, day: ev.day, qty: ev.qty, note: ev.note })
+    const { error } = await db().from('taskflow_counter_events').insert({ id: ev.id, counter_id: ev.counter_id, at: ev.at, day: ev.day, qty: ev.qty, note: ev.note, reason: ev.reason })
     if (error) {
       setEvents((l) => l.filter((x) => x.id !== ev.id))
-      toast.show(`Couldn't record that: ${friendlyDbError(error)}`, () => void tap(counterId, { at, qty, note }))
+      toast.show(`Couldn't record that: ${friendlyDbError(error)}`, () => void tap(counterId, { at, qty, note, reason }))
       return null
     }
     return ev
@@ -109,10 +111,22 @@ export function CountersProvider({ children }: { children: ReactNode }) {
     if (writesOff.current) { offline(); return false }
     const prev = eRef.current.find((e) => e.id === id)
     if (!prev) return false
-    const next = patch.at ? { ...buildEvent(prev.counter_id, patch.at, id, patch.qty ?? prev.qty, patch.note !== undefined ? patch.note : prev.note) } : { ...prev, qty: patch.qty ?? prev.qty, note: patch.note !== undefined ? patch.note : prev.note }
+    const reason = patch.reason !== undefined ? patch.reason : prev.reason
+    const note = patch.note !== undefined ? patch.note : prev.note
+    const next = patch.at ? buildEvent(prev.counter_id, patch.at, id, patch.qty ?? prev.qty, note, reason) : { ...prev, qty: patch.qty ?? prev.qty, note, reason }
     setEvents((l) => l.map((e) => (e.id === id ? next : e)))
-    const { error } = await db().from('taskflow_counter_events').update({ at: next.at, qty: next.qty, note: next.note }).eq('id', id)
+    const { error } = await db().from('taskflow_counter_events').update({ at: next.at, qty: next.qty, note: next.note, reason: next.reason }).eq('id', id)
     if (error) { setEvents((l) => l.map((e) => (e.id === id ? prev : e))); toast.show(`Couldn't save the change: ${friendlyDbError(error)}`); return false }
+    return true
+  }, [offline, setEvents, toast])
+
+  const setReason = useCallback<CountersApi['setReason']>(async (id, reason) => {
+    if (writesOff.current) { offline(); return false }
+    const prev = eRef.current.find((e) => e.id === id)
+    if (!prev) return false
+    setEvents((l) => l.map((e) => (e.id === id ? { ...e, reason } : e)))
+    const { error } = await db().from('taskflow_counter_events').update({ reason }).eq('id', id)
+    if (error) { setEvents((l) => l.map((e) => (e.id === id ? prev : e))); toast.show(`Couldn't save the reason: ${friendlyDbError(error)}`); return false }
     return true
   }, [offline, setEvents, toast])
 
@@ -137,6 +151,11 @@ export function CountersProvider({ children }: { children: ReactNode }) {
       body = { ...body, name: body.name.trim() }
     }
     if (body.short_label !== undefined) body = { ...body, short_label: body.short_label?.trim() || null }
+    if (body.reasons !== undefined) {
+      const problem = validateReasons(body.reasons ?? [])
+      if (problem) return problem
+      body = { ...body, reasons: cleanReasons(body.reasons ?? []) }
+    }
     setCounters((l) => l.map((c) => (c.id === id ? { ...c, ...body } : c)))
     const { error } = await db().from('taskflow_counters').update(body).eq('id', id)
     if (error) { setCounters((l) => l.map((c) => (c.id === id ? prev : c))); return error.code === '23505' ? 'A counter with that name already exists.' : friendlyDbError(error) }
@@ -155,7 +174,7 @@ export function CountersProvider({ children }: { children: ReactNode }) {
     return true
   }, [offline, setCounters, toast])
 
-  const api = useMemo<CountersApi>(() => ({ counters, events, loading, tap, removeEvent, editEvent, addCounter, updateCounter, reorderCounters }),
-    [counters, events, loading, tap, removeEvent, editEvent, addCounter, updateCounter, reorderCounters])
+  const api = useMemo<CountersApi>(() => ({ counters, events, loading, tap, removeEvent, setReason, editEvent, addCounter, updateCounter, reorderCounters }),
+    [counters, events, loading, tap, removeEvent, setReason, editEvent, addCounter, updateCounter, reorderCounters])
   return <CountersContext.Provider value={api}>{children}</CountersContext.Provider>
 }

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  activeCounters, applyEventChange, buildEvent, counterStats, lastEvent, nextCounterSort, perDay, perMonth, perWeek, sinceLabel, sumQty, todaysEvents,
+  activeCounters, applyEventChange, bestGapThisWeek, buildEvent, byHourOfDay, cleanReasons, counterStats, longestGap, reasonCounts, validateReasons, lastEvent, nextCounterSort, perDay, perMonth, perWeek, sinceLabel, sumQty, todaysEvents,
   totalsByDay, validateCounterName, type Counter, type CounterEvent,
 } from './counters'
 
 let n = 0
 const ev = (day: string, qty = 1, over: Partial<CounterEvent> = {}): CounterEvent => {
   n++
-  return { id: `e${n}`, counter_id: 'c1', at: `${day}T15:00:00.000Z`, day, qty, note: null, ...over }
+  return { id: `e${n}`, counter_id: 'c1', at: `${day}T15:00:00.000Z`, day, qty, note: null, reason: null, ...over }
 }
 const TODAY = '2026-11-10' // Tuesday
 
@@ -101,7 +101,7 @@ describe('Toronto days, including the DST changes', () => {
   })
   it('builds a past tap with its own time, quantity and note', () => {
     const e = buildEvent('c1', new Date('2026-11-09T18:30:00Z'), 'x', 2, 'after lunch')
-    expect(e).toEqual({ id: 'x', counter_id: 'c1', at: '2026-11-09T18:30:00.000Z', day: '2026-11-09', qty: 2, note: 'after lunch' })
+    expect(e).toEqual({ id: 'x', counter_id: 'c1', at: '2026-11-09T18:30:00.000Z', day: '2026-11-09', qty: 2, note: 'after lunch', reason: null })
   })
 })
 
@@ -152,9 +152,9 @@ describe('undo and realtime merge', () => {
 
 describe('counter list rules', () => {
   const cs: Counter[] = [
-    { id: '1', name: 'Weed', short_label: 'Weed', color: '#22c55e', sort: 1, archived: false },
-    { id: '2', name: 'Cigarette', short_label: 'Cig', color: '#6b7280', sort: 0, archived: false },
-    { id: '3', name: 'Old', short_label: null, color: '#000000', sort: 2, archived: true },
+    { id: '1', name: 'Weed', short_label: 'Weed', color: '#22c55e', sort: 1, archived: false, reasons: null },
+    { id: '2', name: 'Cigarette', short_label: 'Cig', color: '#6b7280', sort: 0, archived: false, reasons: null },
+    { id: '3', name: 'Old', short_label: null, color: '#000000', sort: 2, archived: true, reasons: null },
   ]
   it('orders active counters and picks the next sort', () => {
     expect(activeCounters(cs).map((c) => c.name)).toEqual(['Cigarette', 'Weed'])
@@ -167,5 +167,56 @@ describe('counter list rules', () => {
     expect(validateCounterName('old', cs)).toMatch(/already exists/)
     expect(validateCounterName('Weed', cs, '1')).toBeNull()
     expect(validateCounterName('Coffee', cs)).toBeNull()
+  })
+})
+
+describe('reasons', () => {
+  it('cleanReasons trims, drops empties and case-insensitive duplicates', () => {
+    expect(cleanReasons([' bored ', '', 'Bored', 'social'])).toEqual(['bored', 'social'])
+  })
+  it('validateReasons caps count and length', () => {
+    expect(validateReasons(['a', 'b'])).toBeNull()
+    expect(validateReasons(Array.from({ length: 13 }, (_, i) => `r${i}`))).toMatch(/At most/)
+    expect(validateReasons(['x'.repeat(25)])).toMatch(/24/)
+  })
+  it('reasonCounts: by quantity, most used first, untagged apart', () => {
+    const list = [ev('2026-11-10', 1, { reason: 'bored' }), ev('2026-11-10', 2, { reason: 'stress' }), ev('2026-11-09', 1, { reason: 'bored' }), ev('2026-11-09')]
+    expect(reasonCounts(list)).toEqual({ reasons: [{ reason: 'stress', count: 2 }, { reason: 'bored', count: 2 }].sort((a, b) => a.reason.localeCompare(b.reason)), none: 1 })
+  })
+  it('byHourOfDay uses the Toronto hour and can filter by reason', () => {
+    const list = [
+      ev('2026-11-10', 1, { at: '2026-11-10T15:30:00.000Z', reason: 'bored' }), // 10:30 Toronto (EST)
+      ev('2026-11-10', 2, { at: '2026-11-10T15:05:00.000Z' }),
+      ev('2026-11-10', 1, { at: '2026-11-11T03:00:00.000Z', reason: 'bored' }), // 22:00 Toronto
+    ]
+    const all = byHourOfDay(list)
+    expect(all[10]).toBe(3)
+    expect(all[22]).toBe(1)
+    expect(byHourOfDay(list, 'bored')[10]).toBe(1)
+  })
+})
+
+describe('gaps between taps', () => {
+  const at = (iso: string) => ev('2026-11-10', 1, { at: iso })
+  const day = [at('2026-11-10T14:00:00.000Z'), at('2026-11-10T15:30:00.000Z'), at('2026-11-10T16:00:00.000Z')] // 09:00, 10:30, 11:00 Toronto
+  it('longest gap on a finished day is between two taps that day', () => {
+    expect(longestGap(day, '2026-11-10', '2026-11-12T12:00:00.000Z')).toBe(90)
+  })
+  it('today, the gap still running counts', () => {
+    expect(longestGap(day, '2026-11-10', '2026-11-10T20:00:00.000Z')).toBe(240) // 11:00 → 15:00 Toronto
+  })
+  it('one tap on a finished day, or none, has no gap; one tap today has the running gap', () => {
+    expect(longestGap([day[0]], '2026-11-10', '2026-11-12T12:00:00.000Z')).toBeNull()
+    expect(longestGap([], '2026-11-10', '2026-11-10T20:00:00.000Z')).toBeNull()
+    expect(longestGap([day[0]], '2026-11-10', '2026-11-10T16:00:00.000Z')).toBe(120)
+  })
+  it('the overnight gap is not counted', () => {
+    const two = [at('2026-11-10T03:00:00.000Z'), ev('2026-11-11', 1, { at: '2026-11-11T14:00:00.000Z' })] // 22:00 on the 9th... and 09:00 on the 11th
+    expect(longestGap(two, '2026-11-11', '2026-11-12T12:00:00.000Z')).toBeNull()
+  })
+  it('best gap this week is the best day so far', () => {
+    const wk = [...day, ev('2026-11-09', 1, { at: '2026-11-09T14:00:00.000Z' }), ev('2026-11-09', 1, { at: '2026-11-09T20:00:00.000Z' })]
+    expect(bestGapThisWeek(wk, '2026-11-10', '2026-11-10T16:00:00.000Z')).toBe(360) // Monday 09:00 → 15:00
+    expect(bestGapThisWeek([], '2026-11-10', '2026-11-10T16:00:00.000Z')).toBeNull()
   })
 })

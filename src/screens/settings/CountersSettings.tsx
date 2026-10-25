@@ -1,12 +1,49 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Icon } from '../../app/Icon'
 import { useConnection } from '../../app/connection'
 import { btn, btnPrimary, card, input, label, sectionTitle } from '../../components/ui'
 import { useCounters } from '../../data/counters'
 import { AREA_COLORS } from '../../lib/areas'
-import { byCounterSort, type Counter } from '../../lib/counters'
+import { byCounterSort, cleanReasons, MAX_REASON_LENGTH, type Counter } from '../../lib/counters'
 import { reorderWithin } from '../../lib/tasks'
 import { Swatches } from './Swatches'
+
+/** The chips offered after a tap. Edited as a list: add, remove, move up. Changes save when you press Save reasons. */
+function ReasonsEditor({ counter }: { counter: Counter }) {
+  const { updateCounter } = useCounters()
+  const { writesDisabled } = useConnection()
+  const [list, setList] = useState<string[]>(counter.reasons ?? [])
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  const change = (next: string[]) => { setList(next); setSaved(false) }
+  const addDraft = () => { const next = cleanReasons([...list, draft]); if (next.length !== list.length) change(next); setDraft('') }
+  const move = (i: number) => { if (i === 0) return; const n = [...list]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; change(n) }
+  const save = async () => { const e = await updateCounter(counter.id, { reasons: list }); setError(e); setSaved(!e) }
+  return (
+    <div className="space-y-2" role="group" aria-label={`Reasons for ${counter.name}`}>
+      <span className={label}>Reasons <span className="font-normal text-slate-500">(optional chips after a tap)</span></span>
+      {list.length === 0 && <p className="text-sm text-slate-500">None. No chips are shown.</p>}
+      <ul className="flex flex-wrap gap-1.5">
+        {list.map((r, i) => (
+          <li key={r} className="flex items-center rounded-full border border-slate-300 text-sm dark:border-slate-700">
+            <button type="button" aria-label={`Move ${r} earlier`} disabled={i === 0} onClick={() => move(i)} className="min-h-9 pl-3 pr-1 text-slate-500 disabled:opacity-30"><Icon name="up" className="h-4 w-4 -rotate-90" /></button>
+            <span className="px-1">{r}</span>
+            <button type="button" aria-label={`Remove ${r}`} onClick={() => change(list.filter((x) => x !== r))} className="min-h-9 min-w-9 pr-1 text-slate-500">✕</button>
+          </li>
+        ))}
+      </ul>
+      <div className="flex gap-2">
+        <input className={input} value={draft} maxLength={MAX_REASON_LENGTH} placeholder="Add a reason" aria-label={`New reason for ${counter.name}`} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDraft() } }} />
+        <button type="button" className={btn} disabled={!draft.trim()} onClick={addDraft}>Add</button>
+      </div>
+      {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      <button type="button" className={btn} disabled={writesDisabled} onClick={() => void save()}>Save reasons</button>
+      {saved && <span role="status" className="ml-2 text-sm text-emerald-700 dark:text-emerald-400">Saved</span>}
+    </div>
+  )
+}
 
 function Editor({ counter, onDone }: { counter: Counter; onDone: () => void }) {
   const { updateCounter } = useCounters()
@@ -22,6 +59,8 @@ function Editor({ counter, onDone }: { counter: Counter; onDone: () => void }) {
         <label className={label}>Short label<input className={`${input} mt-1`} value={shortLabel} onChange={(e) => setShortLabel(e.target.value)} maxLength={8} aria-label="Short label" placeholder={name.slice(0, 4)} /></label>
       </div>
       <div><span className={label}>Colour</span><div className="mt-1"><Swatches value={counter.color} onPick={(c) => void updateCounter(counter.id, { color: c })} /></div></div>
+      <ReasonsEditor counter={counter} />
+      <Link to={`/settings?goal=counter_count:${counter.id}`} className="inline-block text-sm text-indigo-600 dark:text-indigo-400">Set a goal for {counter.name} →</Link>
       {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex flex-wrap gap-2">
         <button className={btnPrimary} disabled={writesDisabled || !name.trim()} onClick={() => void save()}>Save</button>

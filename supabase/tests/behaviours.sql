@@ -203,4 +203,47 @@ do $$ begin
   if not has_function_privilege('authenticated', 'public.taskflow_log_activity(uuid,uuid,int,timestamptz)', 'execute') then raise exception 'authenticated cannot execute taskflow_log_activity'; end if;
 end $$;
 
+-- ── goals + reasons (phase 2.8) ──
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'x', false) \g /dev/null
+do $$ declare c uuid; g1 uuid := gen_random_uuid(); ser uuid; n int; begin
+  insert into taskflow_counters (name, reasons) values ('GoalCtr', array['bored','stress']) returning id into c;
+  if (select reasons from taskflow_counters where id = c) <> array['bored','stress'] then raise exception 'reasons not stored'; end if;
+  insert into taskflow_counter_events (counter_id, qty, reason) values (c, 1, 'bored');
+  if (select reason from taskflow_counter_events where counter_id = c) <> 'bored' then raise exception 'reason not stored'; end if;
+  insert into taskflow_counter_events (counter_id, qty) values (c, 1);
+  if (select count(*) from taskflow_counter_events where counter_id = c and reason is null) <> 1 then raise exception 'reason must be optional'; end if;
+
+  insert into taskflow_goals (id, metric, target_id, direction, amount, period, starts_on) values (g1, 'counter_count', c, 'at_most', 5, 'day', '2026-11-01') returning series_id into ser;
+  -- a new version shares the series; the old one ends the day before
+  update taskflow_goals set ends_on = '2026-11-09' where id = g1;
+  insert into taskflow_goals (series_id, metric, target_id, direction, amount, period, starts_on) values (ser, 'counter_count', c, 'at_most', 4, 'day', '2026-11-10');
+  select count(*) into n from taskflow_goals where series_id = ser;
+  if n <> 2 then raise exception 'versions not stored (%)', n; end if;
+  begin insert into taskflow_goals (metric, target_id, direction, amount, period, starts_on) values ('counter_count', c, 'at_most', 0, 'day', '2026-11-01'); raise exception 'zero amount allowed';
+  exception when check_violation then null; end;
+  begin insert into taskflow_goals (metric, target_id, direction, amount, period, starts_on) values ('counter_count', c, 'sideways', 1, 'day', '2026-11-01'); raise exception 'bad direction allowed';
+  exception when check_violation then null; end;
+  begin insert into taskflow_goals (metric, target_id, direction, amount, period, starts_on, ends_on) values ('counter_count', c, 'at_most', 1, 'day', '2026-11-05', '2026-11-04'); raise exception 'ends before it starts';
+  exception when check_violation then null; end;
+  begin insert into taskflow_goals (metric, direction, amount, period, starts_on) values ('counter_count', 'at_most', 1, 'day', '2026-11-01'); raise exception 'counter goal without a target';
+  exception when check_violation then null; end;
+  begin insert into taskflow_goals (metric, target_id, direction, amount, period, starts_on) values ('tasks_done', c, 'at_least', 1, 'day', '2026-11-01'); raise exception 'tasks goal with a target';
+  exception when check_violation then null; end;
+  insert into taskflow_goals (metric, direction, amount, period, starts_on) values ('tasks_done', 'at_least', 3, 'day', '2026-11-01');
+  perform set_config('tf.goal_series', ser::text, false);
+end $$;
+select set_config('request.jwt.claim.sub', :'y', false) \g /dev/null
+do $$ begin
+  if (select count(*) from taskflow_goals) <> 0 then raise exception 'user y can see user x''s goals'; end if;
+  delete from taskflow_goals;
+end $$;
+select set_config('request.jwt.claim.sub', :'x', false) \g /dev/null
+do $$ begin
+  if (select count(*) from taskflow_goals where series_id = current_setting('tf.goal_series')::uuid) <> 2 then raise exception 'user y deleted user x''s goals'; end if;
+  delete from taskflow_goals where series_id = current_setting('tf.goal_series')::uuid;   -- deleting a goal removes every version
+  if (select count(*) from taskflow_goals where series_id = current_setting('tf.goal_series')::uuid) <> 0 then raise exception 'delete left versions'; end if;
+end $$;
+reset role;
+
 select 'BEHAVIOURS PASSED' as result;

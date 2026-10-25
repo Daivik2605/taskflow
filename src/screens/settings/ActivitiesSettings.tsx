@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Icon } from '../../app/Icon'
 import { useConnection } from '../../app/connection'
 import { TagPicker } from '../../components/TagPicker'
@@ -45,6 +46,7 @@ function Editor({ activity, onDone }: { activity: Activity; onDone: () => void }
   return (
     <div className="space-y-3 border-t border-slate-100 p-3 dark:border-slate-800">
       <Fields {...{ name, setName, tag, setTag, minutes, setMinutes, target, setTarget }} />
+      <Link to={`/settings?goal=activity_count:${activity.id}`} className="inline-block text-sm text-indigo-600 dark:text-indigo-400">Set a goal for {activity.name} →</Link>
       {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex flex-wrap gap-2">
         <button className={btnPrimary} disabled={writesDisabled || !name.trim()} onClick={() => void save()}>Save</button>

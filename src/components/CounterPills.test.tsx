@@ -9,7 +9,7 @@ beforeAll(polyfillDialog)
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] }); vi.setSystemTime(new Date('2026-11-10T15:00:00Z')) })
 afterEach(() => { vi.useRealTimers() })
 
-const ev = (id: string, counter: string, at: string, day: string, qty = 1): CounterEvent => ({ id, counter_id: counter, at, day, qty, note: null })
+const ev = (id: string, counter: string, at: string, day: string, qty = 1): CounterEvent => ({ id, counter_id: counter, at, day, qty, note: null, reason: null })
 const events = [
   ev('e1', 'c-cig', '2026-11-10T14:00:00Z', '2026-11-10'),
   ev('e2', 'c-cig', '2026-11-10T12:50:00Z', '2026-11-10'), // 2h 10m before "now"
@@ -25,7 +25,7 @@ describe('counter pills', () => {
     expect(btn(/^Weed: 0 today/)).toHaveTextContent(/^Weed\s*0$/)
   })
   it('fall back to the full name when a counter has no short label', () => {
-    renderApp(<CounterPills />, { counters: [{ id: 'c1', name: 'Alcohol', short_label: null, color: '#000000', sort: 0, archived: false }, { id: 'c2', name: 'Coffee', short_label: '  ', color: '#000000', sort: 1, archived: false }] })
+    renderApp(<CounterPills />, { counters: [{ id: 'c1', name: 'Alcohol', short_label: null, color: '#000000', sort: 0, archived: false, reasons: null }, { id: 'c2', name: 'Coffee', short_label: '  ', color: '#000000', sort: 1, archived: false, reasons: null }] })
     expect(btn(/^Alcohol: 0 today/)).toHaveTextContent(/^Alcohol\s*0$/)
     expect(btn(/^Coffee: 0 today/)).toHaveTextContent(/^Coffee\s*0$/)
   })
@@ -129,7 +129,7 @@ describe('counter pills', () => {
       fireEvent.change(sheet.getByLabelText('How many'), { target: { value: '2' } })
       fireEvent.change(sheet.getByLabelText(/^Note/), { target: { value: 'after breakfast' } })
       fireEvent.click(sheet.getByRole('button', { name: 'Add' }))
-      expect(countersApi.tap).toHaveBeenCalledWith('c-cig', { at: new Date('2026-11-10T13:15:00Z'), qty: 2, note: 'after breakfast' }) // 08:15 EST
+      expect(countersApi.tap).toHaveBeenCalledWith('c-cig', { at: new Date('2026-11-10T13:15:00Z'), qty: 2, note: 'after breakfast', reason: null }) // 08:15 EST
     })
     it('refuses a time in the future and a bad quantity', () => {
       const { countersApi } = renderApp(<CounterPills />, { events })
@@ -156,7 +156,7 @@ describe('counter pills', () => {
       expect(sheet.getByLabelText('Time')).toHaveValue('2026-11-10T09:00')
       fireEvent.change(sheet.getByLabelText('Time'), { target: { value: '2026-11-10T09:30' } })
       fireEvent.click(sheet.getByRole('button', { name: 'Save' }))
-      expect(countersApi.editEvent).toHaveBeenCalledWith('e1', { at: new Date('2026-11-10T14:30:00Z'), qty: 1, note: null })
+      expect(countersApi.editEvent).toHaveBeenCalledWith('e1', { at: new Date('2026-11-10T14:30:00Z'), qty: 1, note: null, reason: null })
     })
     it('links to the stats', () => {
       renderApp(<CounterPills />, { events })
@@ -176,7 +176,7 @@ describe('counter pills', () => {
     expect(container.querySelector('[role="group"]')).toBeNull()
   })
   it('skip archived counters', () => {
-    renderApp(<CounterPills />, { counters: [{ id: 'c1', name: 'Gone', short_label: null, color: '#000000', sort: 0, archived: true }, { id: 'c2', name: 'Here', short_label: null, color: '#000000', sort: 1, archived: false }] })
+    renderApp(<CounterPills />, { counters: [{ id: 'c1', name: 'Gone', short_label: null, color: '#000000', sort: 0, archived: true, reasons: null }, { id: 'c2', name: 'Here', short_label: null, color: '#000000', sort: 1, archived: false, reasons: null }] })
     expect(screen.queryByRole('button', { name: /^Gone/ })).toBeNull()
     expect(screen.getByRole('button', { name: /^Here/ })).toBeInTheDocument()
   })

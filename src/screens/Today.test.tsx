@@ -27,7 +27,7 @@ describe('Today', () => {
   it('lists missed, deadlines in the next 14 days, today, in a window, no date, done today', () => {
     renderApp(<Today />, { tasks: tasks() })
     expect(headings()).toEqual([
-      'Missed · 2 reschedule or drop', 'Deadlines in the next 14 days · 1', 'Today · 1', 'In a window · 1', 'No date · 1', 'Done today · 1'])
+      'Goals', 'Missed · 2 reschedule or drop', 'Deadlines in the next 14 days · 1', 'Today · 1', 'In a window · 1', 'No date · 1', 'Done today · 1'])
   })
   it('hides upcoming tasks, far deadlines and sub-tasks', () => {
     renderApp(<Today />, { tasks: tasks() })

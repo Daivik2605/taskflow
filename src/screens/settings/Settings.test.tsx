@@ -156,7 +156,7 @@ describe('Settings → Counters', () => {
   })
   it('shows archived counters apart and shows a refusal', async () => {
     const updateCounter = vi.fn(async () => 'A counter with that name already exists.')
-    renderApp(<CountersSettings />, { countersApi: fakeCountersApi([...COUNTERS, { id: 'c-old', name: 'Old', short_label: null, color: '#000000', sort: 5, archived: true }], [], { updateCounter }) })
+    renderApp(<CountersSettings />, { countersApi: fakeCountersApi([...COUNTERS, { id: 'c-old', name: 'Old', short_label: null, color: '#000000', sort: 5, archived: true, reasons: null }], [], { updateCounter }) })
     expect(screen.getByRole('heading', { name: 'Archived' })).toBeInTheDocument()
     await edit('Weed')
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -254,5 +254,23 @@ describe('Settings → Activities', () => {
     await userEvent.click(screen.getAllByRole('option', { name: /Work/ })[0])
     await userEvent.click(form.getByRole('button', { name: 'Add activity' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('already exists')
+  })
+})
+
+describe('Settings → Counters → reasons', () => {
+  it('edits the chip list: add, remove, and saves it cleaned', async () => {
+    const { countersApi } = renderApp(<CountersSettings />)
+    await edit('Cigarette')
+    const box = within(screen.getByRole('group', { name: 'Reasons for Cigarette' }))
+    expect(box.getByText('bored')).toBeInTheDocument()
+    await userEvent.click(box.getByRole('button', { name: 'Remove bored' }))
+    await userEvent.type(box.getByLabelText('New reason for Cigarette'), ' with coffee {Enter}')
+    await userEvent.click(box.getByRole('button', { name: 'Save reasons' }))
+    expect(countersApi.updateCounter).toHaveBeenLastCalledWith('c-cig', { reasons: ['stress', 'with coffee'] })
+  })
+  it('a counter with no reasons says so', async () => {
+    renderApp(<CountersSettings />)
+    await edit('Weed')
+    expect(within(screen.getByRole('group', { name: 'Reasons for Weed' })).getByText(/No chips are shown/)).toBeInTheDocument()
   })
 })

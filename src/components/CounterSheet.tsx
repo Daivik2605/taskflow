@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 import { useConnection } from '../app/connection'
 import { useToday } from '../app/useToday'
 import { useCounters } from '../data/counters'
-import { lastEvent, sinceLabel, todaysEvents, type Counter, type CounterEvent } from '../lib/counters'
-import { formatTime, instantToTorontoLocal, torontoLocalToInstant } from '../lib/time'
-import { btn, btnDanger, btnPrimary, input, label } from './ui'
+import { bestGapThisWeek, lastEvent, longestGap, forCounter, sinceLabel, todaysEvents, type Counter, type CounterEvent } from '../lib/counters'
+import { formatDuration, formatTime, instantToTorontoLocal, torontoLocalToInstant } from '../lib/time'
+import { useSettings } from '../data/settings'
+import { btn, btnDanger, btnPrimary, input, label, select } from './ui'
 
 /** Long-press / "…" on a counter: add a tap at a past time, and edit or delete today's taps. Times are read as Toronto time. */
 export function CounterSheet({ counter, now, onClose }: { counter: Counter | null; now: Date; onClose: () => void }) {
@@ -29,6 +30,8 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
   const { events, tap, removeEvent } = useCounters()
   const { writesDisabled } = useConnection()
   const today = useToday()
+  const { weekStartsOn } = useSettings()
+  const [reason, setReason] = useState('')
   const [when, setWhen] = useState(() => instantToTorontoLocal(new Date()))
   const [qty, setQty] = useState('1')
   const [note, setNote] = useState('')
@@ -37,6 +40,10 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
 
   const taps = todaysEvents(events, counter.id, today)
   const last = lastEvent(events, counter.id)
+  const mine = forCounter(events, counter.id)
+  const longestToday = longestGap(mine, today, now)
+  const bestWeek = bestGapThisWeek(mine, today, now, weekStartsOn)
+  const reasons = counter.reasons ?? []
 
   const check = (whenValue: string, qtyValue: string): { at: Date; qty: number } | null => {
     let at: Date
@@ -52,8 +59,8 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
     e.preventDefault()
     const v = check(when, qty)
     if (!v) return
-    const ev = await tap(counter.id, { at: v.at, qty: v.qty, note: note.trim() || null })
-    if (ev) { setNote(''); setQty('1'); setWhen(instantToTorontoLocal(new Date())) }
+    const ev = await tap(counter.id, { at: v.at, qty: v.qty, note: note.trim() || null, reason: reason || null })
+    if (ev) { setNote(''); setReason(''); setQty('1'); setWhen(instantToTorontoLocal(new Date())) }
   }
 
   return (
@@ -62,6 +69,9 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
         <div>
           <h2 className="text-lg font-semibold"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: counter.color }} aria-hidden="true" />{counter.name}</h2>
           <p className="text-sm text-slate-500">{last ? `last: ${sinceLabel(last.at, now)}` : 'none yet'}</p>
+          <p className="text-sm text-slate-500">
+            Longest gap today: {longestToday === null ? 'none yet' : formatDuration(longestToday)} · Best gap this week: {bestWeek === null ? 'none yet' : formatDuration(bestWeek)}
+          </p>
         </div>
         <button type="button" onClick={onClose} className="min-h-11 min-w-11 rounded-lg text-xl" aria-label="Close">✕</button>
       </div>
@@ -79,6 +89,14 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
             <input className={`${input} mt-1`} value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
         </div>
+        {reasons.length > 0 && (
+          <label className={label}>Reason <span className="font-normal text-slate-500">(optional)</span>
+            <select className={`${select} mt-1`} value={reason} onChange={(e) => setReason(e.target.value)}>
+              <option value="">No reason</option>
+              {reasons.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
+        )}
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <button className={`${btnPrimary} w-full`} disabled={writesDisabled}>Add</button>
       </form>
@@ -88,10 +106,10 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
         {taps.length === 0 ? <p className="text-sm text-slate-500">None yet today.</p> : (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {taps.map((t) => editing === t.id
-              ? <EditRow key={t.id} ev={t} check={check} onDone={() => setEditing(null)} />
+              ? <EditRow key={t.id} ev={t} reasons={reasons} check={check} onDone={() => setEditing(null)} />
               : (
                 <li key={t.id} className="flex items-center gap-2 py-1">
-                  <span className="flex-1 text-sm">{formatTime(t.at)}{t.qty > 1 ? ` · ×${t.qty}` : ''}{t.note ? ` · ${t.note}` : ''}</span>
+                  <span className="flex-1 text-sm">{formatTime(t.at)}{t.qty > 1 ? ` · ×${t.qty}` : ''}{t.reason ? ` · ${t.reason}` : ''}{t.note ? ` · ${t.note}` : ''}</span>
                   <button type="button" className={`${btn} min-h-9 px-3`} disabled={writesDisabled} onClick={() => setEditing(t.id)} aria-label={`Edit tap at ${formatTime(t.at)}`}>Edit</button>
                   <button type="button" className={`${btnDanger} min-h-9 px-3`} disabled={writesDisabled} onClick={() => void removeEvent(t.id)} aria-label={`Delete tap at ${formatTime(t.at)}`}>Delete</button>
                 </li>
@@ -101,7 +119,10 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
       </div>
 
       <div className="flex items-center justify-between">
-        <Link to={`/insights?tab=counters&counter=${counter.id}`} onClick={onClose} className="text-sm text-indigo-600 dark:text-indigo-400">See stats →</Link>
+        <div className="flex flex-col gap-1 text-sm text-indigo-600 dark:text-indigo-400">
+          <Link to={`/insights?tab=counters&counter=${counter.id}`} onClick={onClose}>See stats →</Link>
+          <Link to={`/settings?goal=counter_count:${counter.id}`} onClick={onClose}>Set a goal →</Link>
+        </div>
         <button type="button" className={btn} onClick={onClose}>Done</button>
       </div>
     </div>
@@ -109,15 +130,17 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
 
 }
 
-function EditRow({ ev, check, onDone }: { ev: CounterEvent; check: (when: string, qty: string) => { at: Date; qty: number } | null; onDone: () => void }) {
+function EditRow({ ev, reasons, check, onDone }: { ev: CounterEvent; reasons: string[]; check: (when: string, qty: string) => { at: Date; qty: number } | null; onDone: () => void }) {
   const { editEvent } = useCounters()
   const [when, setWhen] = useState(instantToTorontoLocal(ev.at))
   const [qty, setQty] = useState(String(ev.qty))
   const [note, setNote] = useState(ev.note ?? '')
+  const [reason, setReason] = useState(ev.reason ?? '')
+  const options = ev.reason && !reasons.includes(ev.reason) ? [...reasons, ev.reason] : reasons
   const save = async () => {
     const v = check(when, qty)
     if (!v) return
-    if (await editEvent(ev.id, { at: v.at, qty: v.qty, note: note.trim() || null })) onDone()
+    if (await editEvent(ev.id, { at: v.at, qty: v.qty, note: note.trim() || null, reason: reason || null })) onDone()
   }
   return (
     <li className="space-y-2 py-2">
@@ -126,6 +149,12 @@ function EditRow({ ev, check, onDone }: { ev: CounterEvent; check: (when: string
         <input className={input} type="number" min={1} aria-label="Quantity" value={qty} onChange={(e) => setQty(e.target.value)} />
         <input className={input} aria-label="Note" placeholder="Note" value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
+      {options.length > 0 && (
+        <select className={select} aria-label="Reason" value={reason} onChange={(e) => setReason(e.target.value)}>
+          <option value="">No reason</option>
+          {options.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      )}
       <div className="flex gap-2">
         <button type="button" className={btnPrimary} onClick={() => void save()}>Save</button>
         <button type="button" className={btn} onClick={onDone}>Cancel</button>

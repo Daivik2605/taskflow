@@ -8,7 +8,7 @@ import Insights from './Insights'
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-10T15:00:00Z')) }) // Tue 10 Nov 10:00 Toronto
 afterEach(() => vi.useRealTimers())
 
-const ev = (id: string, counter: string, at: string, day: string, qty = 1): CounterEvent => ({ id, counter_id: counter, at, day, qty, note: null })
+const ev = (id: string, counter: string, at: string, day: string, qty = 1): CounterEvent => ({ id, counter_id: counter, at, day, qty, note: null, reason: null })
 const events = [
   ev('e1', 'c-cig', '2026-11-10T13:00:00Z', '2026-11-10'), ev('e2', 'c-cig', '2026-11-10T14:30:00Z', '2026-11-10', 2),
   ev('e3', 'c-cig', '2026-11-09T20:00:00Z', '2026-11-09'), ev('e4', 'c-cig', '2026-11-02T20:00:00Z', '2026-11-02'),
