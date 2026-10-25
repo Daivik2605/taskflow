@@ -112,7 +112,9 @@ function RangeView() {
   const { tasks } = useTasks()
   const { areas } = useAreas()
   const { counters, events } = useCounters()
-  const [kind, setKind] = useState<RangeKind>('week')
+  const [params] = useSearchParams()
+  const fromLink = params.get('range')
+  const [kind, setKind] = useState<RangeKind>(fromLink === 'day' || fromLink === 'week' || fromLink === 'month' ? fromLink : 'week') // ?range= from the Today overview cards
   const [anchor, setAnchor] = useState<Day>(today)
   const [custom, setCustom] = useState<{ from: Day; to: Day }>({ from: today, to: today })
 

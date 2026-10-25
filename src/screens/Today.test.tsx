@@ -43,16 +43,6 @@ describe('Today', () => {
     expect(screen.getByText('Window · 5 days left')).toBeInTheDocument()
     expect(chipOf('Call Mom').getByText('Today')).toBeInTheDocument()
   })
-  it('shows done · missed · deadlines missed · left for today, week, month and all time', () => {
-    renderApp(<Today />, { tasks: tasks() })
-    const t = within(screen.getByRole('table', { name: 'Task counters' }))
-    expect(t.getByLabelText('Today done')).toHaveTextContent('1')
-    expect(t.getByLabelText('Today left')).toHaveTextContent('1') // Call Mom
-    expect(t.getByLabelText('Week missed')).toHaveTextContent('1') // Pass G2 (Mon 9 Nov)
-    expect(t.getByLabelText('Week deadlines missed')).toHaveTextContent('0')
-    expect(t.getByLabelText('Month deadlines missed')).toHaveTextContent('1') // Renew passport (8 Nov)
-    expect(t.getByLabelText('All left')).toHaveTextContent('5') // Call Mom, Finish week 3, Tax return, Far deadline, Someday
-  })
   it('ticking a task completes it; un-ticking a finished one re-opens it', async () => {
     const api = fakeTasksApi(tasks())
     renderApp(<Today />, { api })

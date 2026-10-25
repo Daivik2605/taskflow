@@ -4,9 +4,11 @@ TaskFlow is the general-purpose layer of PersonalOS: tasks with deadlines, a tim
 
 Sections are numbered so the build plan can point at them (e.g. "SPEC §6").
 
-**What TaskFlow must answer** (every feature serves one of these): 1. what I did each day · 2. how much time each task took · 3. hours at work · 4. hours studying · 5. how many tasks were missed · 6. how many deadlines were missed — plus cigarette and weed counts, routines kept, and goals hit.
+**What TaskFlow must answer** (every feature serves one of these): 1. what I did each day · 2. how much time each task took · 3. hours at work · 4. hours studying · 5. how many tasks were missed · 6. how many deadlines were missed — plus cigarette and weed counts, activities done, and goals hit.
 
-**Everything is editable:** any routine, goal, tag, counter, preset, reminder, job rule or schedule can be changed, paused or turned off from Settings or from the item itself, and changes apply from today forward without rewriting history.
+**Revision 4 (simplify):** no emojis anywhere in the UI (text labels and colour dots only; the `emoji` columns stay in the database unused); counters are small pills in the top-left of every screen (§13); repeat activities are one-tap buttons, not tasks (§16); the task tag picker shows a short list (§2b); past shifts can be logged in one form (§6.1).
+
+**Everything is editable:** any activity button, goal, tag, counter, reminder, job rule or schedule can be changed, paused or turned off from Settings or from the item itself, and changes apply from today forward without rewriting history.
 
 **Words used in this spec (revision 2, 2026-10-24):** a **tag** is one node of my two-level tag tree (parent → sub-tag, §2b). In the database the table stays `taskflow_areas` and the column `area_id` (no rename, to keep phase 1–2 code and data), but the UI always says **Tag**. Wherever this spec still says "area", read "tag". The free-text `tags text[]` column on tasks is shown in the UI as **Labels** (e.g. `agent`, `urgent`) and never drives time totals.
 
@@ -71,7 +73,8 @@ Seeded tree (editable in **Settings → Tags**: add parent / add sub-tag, rename
 - **Commute** = time from leaving work until I'm home (and to work, if I want). Counted as work-related time, never as paid time.
 - **Productive hours** (dashboard goal) = `study` + `hustle`. **Hours at work** = `work` (paid shift time and commute shown separately). Wellness, break and sleep are balance.
 - Naps → Sleep; resets → Break. Presets: Kriya 35 min → Wellness/Kriya, Padmasadna 20 min → Wellness/Padmasadna.
-- Tag picker: grouped list (parents with sub-tags indented), recent tags first, colour dot + emoji.
+- Tag picker: grouped list (parents with sub-tags indented), recent tags first, colour dot (no emoji).
+- **Task tag shortlist (revision 4):** each tag has `show_for_tasks` (Settings → Tags). The **task** sheet and quick add only offer those, defaulting to: **Oland Stations · Commute · AEO Studio · Projects · Study · Trading** — plus "No tag" (e.g. "Pass G2"). The timer, activities and Insights still use the full tree. A new sub-tag **Hustle / Projects** is added for project work.
 
 ## 3. Tasks and Today
 - **Task sheet:** title, description, due date, area, project, priority, owner, waiting on, tags, sub-tasks (checklist of child tasks). Quick add = title + optional due date, defaults to area *Life admin* (changeable).
@@ -101,6 +104,7 @@ Seeded tree (editable in **Settings → Tags**: add parent / add sub-tag, rename
   - **🚬 / 🌿** — count in the period, with the change vs the previous period (▲ 3 / ▼ 2)
   - **Time** (from phase 4) — hours studying, hustle, at work in the period
   Phone: a 2-column grid of compact cards; desktop: one row. Numbers come from the same pure functions as Insights, so the two never disagree.
+  Built details: Due today, Upcoming and Deadlines are "now" snapshots (marked **now**, they ignore the toggle); To do / Missed / Completed / counters follow it. **To do** = active, not missed, due in the period, plus undated. **Deadlines** counts the next 14 days but names the nearest open one even beyond that. Counter change compares like for like (week so far vs the same days last week; today vs yesterday). One card per active counter. Cards open: Due today → `/tasks?view=today`, Upcoming/Deadlines → their Tasks views, To do → `/tasks`, Missed/Completed → `/insights?tab=range&range=<day|week|month>`, a counter → `/insights?tab=counters&counter=<id>`.
 - **Today screen:** overview strip, smoke counter buttons (§13), pinned action buttons (§5), running timer bar, sleep check-in card (§8) if not logged, tasks: missed (to reschedule or drop) · deadlines coming up · today · in a window · no date, counters, quick-capture button (§9), "going cold" projects (§10).
 - Test example: *Pass G2 — due 2026-11-09 — Life admin.*
 
@@ -123,6 +127,7 @@ Pinned buttons on Today that run a flow instead of being ticked. Flows are **cod
 - On break → `End break` · `I left on break`.
 - After punch out → summary: on the clock, break, paid time, estimated pay, and which rules applied.
 - Punch in also ends any open reset (§7, `ended_by = shift_punch_in`).
+- **Add a past shift** (one form, from the shift button's "…" and from Work → Shifts): job, date, start time, end time (an end earlier than the start means it ended the next day), break minutes (or "no break"), optional notes and store record → shows paid time and pay with the working before saving. Example: Tim Hortons, today, 03:00 → 10:00, 30 min break → 6h 25m paid if clock-in rounding doesn't apply (an exact 03:00 stays 03:00). Same rules as a live shift.
 - **Commute:** after punch out the button offers `Heading home` → starts a timer session on **Work / Commute** (linked to that shift); `I'm home` stops it. Also available before a shift (`Heading to work`, stopped by punch-in). Commute is never paid time.
 - One action button per job (Tim Hortons, Oland Stations); each job has its own rules.
 - Shift history list; any shift editable (times, breaks, notes).
@@ -179,7 +184,7 @@ Work minutes have kind `work`: shown as work hours and pay, never productive hou
 
 ## 11. Dashboard contract (`docs/DATA_CONTRACT.md`, per `../../docs/CONTRACT.md`)
 Sessions, shifts, naps and resets that cross midnight are split across Toronto days.
-- **`taskflow_dashboard_daily`** standard columns: `active_minutes` = minutes under `study` + `hustle` tags; `items_done` = tasks completed that day; `items_planned` = tasks due that day (historically correct — note it); `streak_current` = consecutive days with ≥ 1 productive minute, days off neither break nor extend; `headline` e.g. `2h 10m study · 3 done · 1 missed · 7h 25m work`. Extras: `work_minutes` (paid, my record), `commute_minutes`, `work_unverified_shifts`, `study_minutes`, `hustle_minutes`, `wellness_minutes`, `break_minutes`, `nap_minutes`, `reset_minutes`, `sleep_minutes`, `personal_minutes`, `tasks_missed`, `deadlines_missed`, `cigarettes`, `weed`, `is_day_off`, `routines_done`, `routines_missed`, `goals_hit`, `goals_total`, `mood`, `energy`.
+- **`taskflow_dashboard_daily`** standard columns: `active_minutes` = minutes under `study` + `hustle` tags; `items_done` = tasks completed that day; `items_planned` = tasks due that day (historically correct — note it); `streak_current` = consecutive days with ≥ 1 productive minute, days off neither break nor extend; `headline` e.g. `2h 10m study · 3 done · 1 missed · 7h 25m work`. Extras: `work_minutes` (paid, my record), `commute_minutes`, `work_unverified_shifts`, `study_minutes`, `hustle_minutes`, `wellness_minutes`, `break_minutes`, `nap_minutes`, `reset_minutes`, `sleep_minutes`, `personal_minutes`, `tasks_missed`, `deadlines_missed`, `cigarettes`, `weed`, `is_day_off`, `activities_done`, `goals_hit`, `goals_total`, `mood`, `energy`.
 - **`taskflow_dashboard_now`**: `status_line` e.g. `4 left today · 2 overdue · ⏱ DSA 25m`; `needs_attention` = overdue tasks + unverified shifts older than 14 days; `attention_label` = `overdue tasks / unchecked shifts`. Extras: `open_tasks`, `overdue_tasks`, `inbox_count`, `running_area`, `running_since`, `reset_running_since`, `on_shift_since`, `cold_projects`.
 - **`taskflow_dashboard_area_daily`** (user_id, day, parent_tag, tag, kind, app_key, minutes) — for the per-area chart and the max-rule against app-measured minutes.
 - **`taskflow_dashboard_days_off`** (user_id, day, kind, label).
@@ -188,8 +193,8 @@ Sessions, shifts, naps and resets that cross midnight are split across Toronto d
 - **Deep links** PersonalOS Home opens (keep these routes stable; document them in `docs/DATA_CONTRACT.md`): `/timer?tag=<parent/sub-tag path>` (opens the timer with that tag picked, doesn't auto-start), `/tasks?view=today`, `/insights`, `/work`, `/capture`.
 - All views `security_invoker`, granted to `authenticated`, append-only after release.
 
-## 13. Counters (cigarettes, weed — replaces the planned Smoke app)
-- Two big buttons on Today: **🚬 Cigarette** and **🌿 Weed**, each showing today's count and "last: 2h 10m ago". One tap = +1 event now; a 5-second **Undo** toast. Long-press (or "…") = add with a past time, or open today's events to edit/delete.
+## 13. Counters (cigarettes, weed — replaces the planned Smoke app; revision 4: header pills)
+- **Small counter pills in the top-left corner of every screen** (header, phone and desktop): `Cig 3` · `Weed 1` (today's count; amber/red against a limit once goals exist). One tap = +1 now with a 5-second **Undo** toast. Long-press (or a small chevron) = add at a past time, or open today's taps to edit/delete, and "last: 2h 10m ago". No big buttons on Today.
 - **No time tracking, no cost** — counts only. Generic so more counters can be added in Settings → Counters.
 - **Stats** (Insights → Counters, and a tap on a counter): today, this week, this month, all time; per-day bars (last 30 days), per-week (last 12), per-month (last 12); 7- and 30-day daily average; days since last; zero days this month.
 - Realtime, so a tap on the phone shows on the Mac.
@@ -199,46 +204,38 @@ Sessions, shifts, naps and resets that cross midnight are split across Toronto d
 - **Insights → Range** (day · week · month · custom): hours by parent tag and sub-tag (stacked bar per day + table), **hours at work** (paid shift, commute), **hours studying** (per study sub-tag), top tasks by time, estimate vs actual, tasks done / **tasks missed** / **deadlines missed** (with the list), counters.
 - Built in pieces: tasks + counters sections in phase 2.5, time sections in phase 4, work sections in phase 6.
 
-## 16. Routines and recurring tasks (revision 3)
-A **routine** is a saved, editable template (title, tag, estimate, optional checklist, optional preset duration). Its **schedule** decides whether it creates tasks on its own:
+## 16. Activity buttons (revision 4 — replaces scheduled routines)
+Things I do repeatedly and would never add as a task first (Kriya, Padmasadna, Home Workout, Gym, …) are **buttons**, not tasks.
+- An **Activity** = name, tag (e.g. Wellness / Gym), default minutes, optional weekly target ("3 per week"), sort, archived. Edited in **Settings → Activities** (add, rename, change tag/minutes/target, reorder, hide). Seeded: Kriya 35 min, Padmasadna 20 min, Home Workout 30 min, Gym 60 min (all Wellness sub-tags); targets empty until I set them.
+- **Activity buttons** sit on Today under the overview: one tap = done now → a stopped timer session on its tag, `default_minutes` long, ending now (`source = 'preset'`, so the time counts in Insights). Undo toast. The button shows done today (check) and "2 this week" (or "2/3 this week" with a target).
+- **Long-press / "…"**: log with different minutes, log at an earlier time or another day, see and delete this week's logs. (After phase 4: also "start timer instead".)
+- No schedules, nothing generated, nothing ever "missed". If I skip Gym, nothing happens.
+- Activities **are** the presets from §4 (same table `taskflow_presets`, gaining `weekly_target`): there is one list, not two.
+- Weekly targets feed goals (§17) and the weekly review.
 
-| Schedule | What happens | Example |
-|---|---|---|
-| **On demand** (no schedule) | Nothing appears by itself. It sits in the **Routines picker** on Today; tap it on days I do it → a task for today (or log it done straight away). Never "missed". | Gym, Home Workout |
-| **Daily** | One occurrence every day | Kriya |
-| **Chosen weekdays** | Mon/Wed/Fri… | Padmasadna Tue/Thu |
-| **X times per week (flexible)** | No fixed days: shows "Gym 1/3 this week" and a **Did it today** button; only the weekly count matters | Gym 3×/week |
-| **Every N days** / **monthly on day N** | | Pay rent check |
-
-- **Everything is editable at any time:** switch a routine between on demand and any schedule, change days, pause it (until a date, e.g. vacation), end it, or archive it. Edits apply **from today on**: past occurrences and anything already done stay as they were; untouched future occurrences are regenerated.
-- **Occurrences** are ordinary tasks with `routine_id` + `occurrence_on` (unique together), created lazily and idempotently for today → +7 days, so they work with every task view, the timer ▶, and the overview. An occurrence can be done, **skipped** (with optional reason — not a miss), moved to another day, or edited without changing the routine.
-- **Routine misses are counted separately** from "tasks missed": a fixed-schedule occurrence not done or skipped by the end of its day = routine missed. Flexible and on-demand routines never miss; they only count toward goals.
-- Starting the timer on a routine occurrence uses its tag; a routine linked to a preset can be logged with one tap ("Kriya 35 min done").
-- Streaks per routine (days or weeks hit), shown on the routine and in Insights.
-
-Tables: `taskflow_routines` (title, area_id, description, estimate_minutes, preset_id?, checklist jsonb, `schedule_kind` on_demand · daily · weekdays · times_per_week · every_n_days · monthly, weekdays int[], times_per_week, every_n_days, month_day, starts_on, ends_on?, paused_until?, archived, sort); `taskflow_tasks` gains `routine_id`, `occurrence_on`, and status `skipped` + `skip_reason`.
+Scheduled recurring tasks (daily / weekdays / every N days, with misses) are **dropped from v1**; they can come back later if needed (§15).
 
 ## 17. Goals and targets (revision 3)
 - A **goal** = metric + direction + amount + period, all editable, pausable, deletable:
   - **Time on a tag** (a parent includes its sub-tags): "Study ≥ 15 h / week", "Hustle ≥ 1 h / day"
   - **Counter**: "Cigarettes ≤ 5 / day", "Weed ≤ 2 / day", "≤ 20 / week"
-  - **Routine**: "Gym ≥ 3 × / week", "Kriya ≥ 6 × / week"
+  - **Activity**: "Gym ≥ 3 × / week", "Kriya ≥ 6 × / week" (counts activity-button logs)
   - **Tasks**: "≥ 3 tasks done / day"
 - **History stays true:** editing a goal ends the old version (`ends_on`) and starts a new one (`starts_on`), so past weeks are judged against the target they had then.
 - Shown as progress bars on the overview (§3), in Insights (hit rate per goal, streak of periods hit) and in the weekly review (§18). Days off (§8) are excluded from daily goals.
 - **Smoking extras:** counter buttons show today's count against the limit (turns amber at the limit, red over), a live **time since last**, today's **longest gap** and the best gap this week. After a tap, an optional one-tap **reason** chip row (editable list per counter, defaults: after shift · bored · social · stress · after meal · with coffee); never required. Insights → Counters shows reasons by count and by time of day.
 
-Tables: `taskflow_goals` (name, metric `tag_minutes` · `counter_count` · `routine_count` · `tasks_done`, target_id, direction `at_least` · `at_most`, amount, period `day` · `week` · `month`, starts_on, ends_on?, paused, sort); `taskflow_counters` gains `reasons text[]`; `taskflow_counter_events` gains `reason`.
+Tables: `taskflow_goals` (name, metric `tag_minutes` · `counter_count` · `activity_count` · `tasks_done`, target_id, direction `at_least` · `at_most`, amount, period `day` · `week` · `month`, starts_on, ends_on?, paused, sort); `taskflow_counters` gains `reasons text[]`; `taskflow_counter_events` gains `reason`.
 
 ## 18. Plan the day, shut down the day, weekly review (revision 3)
-- **Morning plan** (card on Today until done or dismissed): today's tasks, routines and deadlines; pick **Top 3**; quick-add anything missing; optional energy 1–5.
-- **Evening shutdown** (card from a set time, default 21:00, or any time): what got done (time by tag, tasks, counters, goals hit), then each open task for today → **tomorrow · pick a day · back to no date · drop**; routine occurrences → done · skipped; **mood 1–5, energy 1–5**, one-line note. Takes ~1 minute.
-- **Weekly review** (Sunday, default; any day possible): last week vs the week before — hours by tag, **planned vs actual** (goal targets vs real), goals hit, tasks done / missed / deadlines missed, routine adherence, cigarettes and weed, average mood/energy/sleep; deadlines in the next 14 days; then set or adjust next week's goals and write a note. Past reviews are browsable.
+- **Morning plan** (card on Today until done or dismissed): today's tasks and deadlines; pick **Top 3**; quick-add anything missing; optional energy 1–5.
+- **Evening shutdown** (card from a set time, default 21:00, or any time): what got done (time by tag, tasks, counters, goals hit), then each open task for today → **tomorrow · pick a day · back to no date · drop**; activities done today (tap any that were missed); **mood 1–5, energy 1–5**, one-line note. Takes ~1 minute.
+- **Weekly review** (Sunday, default; any day possible): last week vs the week before — hours by tag, **planned vs actual** (goal targets vs real), goals hit, tasks done / missed / deadlines missed, activities per week vs targets, cigarettes and weed, average mood/energy/sleep; deadlines in the next 14 days; then set or adjust next week's goals and write a note. Past reviews are browsable.
 - Tables: `taskflow_days` (day unique, top3 uuid[], plan_note, planned_at, mood, energy, review_note, reviewed_at); `taskflow_weeks` (week_start unique, note, reviewed_at, ai_summary?).
 
 ## 19. Logging without opening the app (iPhone Shortcuts, Back Tap, Siri) (revision 3)
 - Supabase Edge Function **`taskflow-api`**, authenticated by a **personal API token** (Settings → Shortcuts: create, name, copy once, revoke; stored hashed in `taskflow_api_tokens` with last_used_at). The function looks up the token's user and acts **only on that user's rows**; it uses the service-role key that Supabase provides to Edge Functions server-side — never in the app or repo.
-- Endpoints (POST, JSON, short spoken-friendly replies like "Cigarette 4 today"): `counter` {name} · `capture` {text} · `timer/start` {preset | tag | task} · `timer/stop` {comment?} · `routine/done` {name}; later phases add `nap/start`, `nap/done`, `reset/done` (phase 5), `shift/punch-in`, `shift/break`, `shift/punch-out`, `commute/start`, `commute/stop` (phase 6).
+- Endpoints (POST, JSON, short spoken-friendly replies like "Cigarette 4 today"): `counter` {name} · `capture` {text} · `timer/start` {preset | tag | task} · `timer/stop` {comment?} · `activity/log` {name, minutes?}; later phases add `nap/start`, `nap/done`, `reset/done` (phase 5), `shift/punch-in`, `shift/break`, `shift/punch-out`, `commute/start`, `commute/stop` (phase 6).
 - The phase writes step-by-step instructions for: a Shortcut per action; **Back Tap** (Settings → Accessibility → Touch → Back Tap → Double Tap = +1 cigarette, Triple Tap = +1 weed); **Siri** ("Hey Siri, log a cigarette"); the **Action button** (iPhone 15 Pro and later); home-screen icons.
 - Rate-limited, logged (`taskflow_api_log`: endpoint, at, ok), and every write is the same as doing it in the app (realtime updates the open app).
 
@@ -249,24 +246,24 @@ Tables: `taskflow_goals` (name, metric `tag_minutes` · `counter_count` · `rout
 
 ## 21. Reminders, notifications and app badge (revision 3)
 - **Web Push** (works on iPhone for home-screen apps, iOS 16.4+, after allowing notifications; and on the Mac). Subscriptions in `taskflow_push_subscriptions`. A scheduled Edge Function **`taskflow-notify`** (pg_cron every 5 min, job named `taskflow_notify`) sends what's due.
-- Each type can be turned on/off and tuned in Settings → Notifications, with **quiet hours**: deadline reminders (days before, default 7, 2, 1, and the morning of) · morning digest (time; due today + top 3) · evening shutdown nudge · weekly review nudge · routine reminder at its time (if a routine has one) · **timer still running** after N hours · **on break** longer than N min · **reset/nap** running long · **counter limit reached** (off by default) · shift starting in 60 min (phase 6 schedule).
+- Each type can be turned on/off and tuned in Settings → Notifications, with **quiet hours**: deadline reminders (days before, default 7, 2, 1, and the morning of) · morning digest (time; due today + top 3) · evening shutdown nudge · weekly review nudge · **timer still running** after N hours · **on break** longer than N min · **reset/nap** running long · **counter limit reached** (off by default) · shift starting in 60 min (phase 6 schedule).
 - **App badge** (Badging API) = missed + due today, updated when the app is open and by pushes.
 - In-app: the timer asks "Still going?" after N hours (setting) even without push.
 
 ## 22. Scheduled shifts and free time (revision 3)
 - Enter upcoming shifts ahead of time (per job: date, start, end — or from a schedule photo read by the phase-12 function, confirmed before saving). A scheduled shift is a `taskflow_shifts` row with `state = scheduled`; punching in on that day fills the scheduled times.
-- The calendar shows scheduled shifts; week view shows **free blocks** between shifts, sleep and fixed routines; a task or routine placed on a time that overlaps a shift is flagged.
+- The calendar shows scheduled shifts; week view shows **free blocks** between shifts and sleep; a task placed on a time that overlaps a shift is flagged.
 - Weekly review shows scheduled vs worked hours.
 
 ## 23. Claude weekly summary and patterns (revision 3)
-- **Weekly summary:** a button in the weekly review (and optional automatic Sunday run) calls Edge Function `taskflow-weekly-summary`, which builds the week's numbers server-side (time by tag, goals, tasks, routines, counters, mood/energy/sleep, task titles — no notes bodies unless I turn that on) and asks Claude (API key in Supabase secrets) for a short, honest summary: what went well, what slipped, one suggestion. Stored in `taskflow_weeks.ai_summary`. Shows the approximate cost. Off by default for the automatic run.
+- **Weekly summary:** a button in the weekly review (and optional automatic Sunday run) calls Edge Function `taskflow-weekly-summary`, which builds the week's numbers server-side (time by tag, goals, tasks, activities, counters, mood/energy/sleep, task titles — no notes bodies unless I turn that on) and asks Claude (API key in Supabase secrets) for a short, honest summary: what went well, what slipped, one suggestion. Stored in `taskflow_weeks.ai_summary`. Shows the approximate cost. Off by default for the automatic run.
 - **Patterns** (Insights → Patterns, after 14+ days of data): daily cigarettes/weed vs sleep, study minutes, mood, energy, work hours; side-by-side lines and a plain-language correlation ("on days you slept < 6 h you smoked 2.1 more on average") with a "this is correlation, not cause" note.
 
 ## 24. Power features (revision 3)
-- **Quick add in plain words** (tested parser, live preview chips before saving): dates (`today`, `tomorrow`, `fri`, `nov 9`, `next week`, `in 2 weeks`), `by <date>` → window ending then, `!deadline` → hard deadline, `#dsa` → tag (fuzzy, sub-tags too), `~1h30` → estimate, `@Anikait` → owner, `every mon wed` / `3x week` → creates a routine. Example: `Pass G2 by nov 9 #personal !deadline`.
+- **Quick add in plain words** (tested parser, live preview chips before saving): dates (`today`, `tomorrow`, `fri`, `nov 9`, `next week`, `in 2 weeks`), `by <date>` → window ending then, `!deadline` → hard deadline, `#dsa` → tag (fuzzy, sub-tags too), `~1h30` → estimate, `@Anikait` → owner. Example: `Pass G2 by nov 9 #personal !deadline`.
 - **Cmd+K command menu** (Mac) — search tasks, notes, projects, tags; run any action (new task, start timer on…, +1 cigarette, start reset, punch in); and keyboard shortcuts (`n` new task, `space` start/pause timer, `c` capture, `?` list).
-- **Trash:** delete = soft delete (`deleted_at`) on tasks, routines, notes, sessions, counter events, projects, goals; Settings → Trash to restore; emptied after 30 days. Every query, view and stat excludes deleted rows.
+- **Trash:** delete = soft delete (`deleted_at`) on tasks, activity logs (sessions), notes, sessions, counter events, projects, goals; Settings → Trash to restore; emptied after 30 days. Every query, view and stat excludes deleted rows.
 - **Export:** CSV per table and a full JSON export from Settings.
 
 ## 15. Later (not in v1)
-Apple Health sleep and workout import through `taskflow-api` (§19); share-sheet capture from other apps. (Recurring tasks, reminders, Shortcuts and offline moved into v1 — §16, §19–§21.)
+Apple Health sleep and workout import through `taskflow-api` (§19); share-sheet capture from other apps. (Reminders, Shortcuts and offline moved into v1 — §19–§21; scheduled recurring tasks dropped in revision 4 — activity buttons (§16) cover repeat activities.)
