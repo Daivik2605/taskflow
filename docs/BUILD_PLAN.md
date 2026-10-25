@@ -81,6 +81,13 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 **Done when:** start on Mac → pause/resume → stop on phone with a comment; duration correct; closing and reopening the app keeps the timer; a preset tap logs its minutes.
 **You:** use it for a real study session (started from a task) and a Kriya log; check Insights → Day.
 
+### Phase 4.5 — Dashboard contract views (moved up from phase 11 so the dashboard can start early)
+**Status:** not started
+> Do Phase 4.5 of docs/BUILD_PLAN.md (SPEC §11 and ../docs/CONTRACT.md): plan first. Add the four views (`taskflow_dashboard_daily`, `_now`, `_area_daily`, `_days_off`) to `supabase/taskflow_schema.sql` (security_invoker, granted to authenticated, append-only once released), splitting sessions, shifts, naps and resets across Toronto days in SQL. All the tables already exist from phase 1, so write **every** column from SPEC §11 now, even for features not built yet (shifts, resets, sleep, days off): they return 0/null until those phases add data. Test on local Postgres with fixture rows for every source (including a shift and a reset), a session crossing midnight, a DST day, a day off and two users (RLS). Fill docs/DATA_CONTRACT.md in the same format as ../chart-journal/docs/DATA_CONTRACT.md (columns, how computed, caveats, change log). Run ../supabase/checks.sql (queries 1–8 return nothing). Note in ../docs/DECISIONS.md that the views are released. Don't edit dashboard files.
+
+**Done when:** the views return correct numbers for the fixtures and line up column-for-column with `trading_dashboard_daily`/`_now`; `select * from taskflow_dashboard_daily order by day desc limit 7` shows today's study minutes from a real timer session.
+**You:** run the schema in the SQL Editor, run that query. Then the dashboard can be built (`../docs/prompts/04-dashboard.md`) while TaskFlow continues with phase 5.
+
 ### Phase 5 — Action tasks + Nap & reset
 **Status:** not started
 > Do Phase 5 of docs/BUILD_PLAN.md (SPEC §5 and §7): plan first. Action registry and pinned action buttons on Today with live state; Settings → Actions (pin, rename, reorder, hide). Nap + reset flow, popup with Undo/Edit, "Still resetting?" check, editing times. SQL: `taskflow_end_reset(p_app, p_detail, p_at)` exactly as SPEC §7 and `../docs/CONTRACT.md` → Shared calls (security invoker, idempotent, granted to authenticated) — TaskFlow's own timer start under a study, hustle or work tag calls the same function (p_app = 'taskflow'). Realtime toast when another app ended the reset. `src/lib/reset.ts` + SQL tests (run against local Postgres): ends once, second call returns `ended: false`, a `p_at` before the reset started does nothing, nap open at the end. Document the function in docs/DATA_CONTRACT.md. Then mark the "Blocked until" lines in ../InteractiveDSA/docs/BUILD_PLAN.md (Phase 3.6) and ../chart-journal/docs/BUILD_STATUS.md as unblocked — this is the one allowed edit outside this folder besides root docs.
@@ -123,12 +130,12 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 **Done when:** a task owned by "Anikait" shows under his group; moving an agent card to *live* completes the task; a project untouched for 30 days shows as going cold (test with a backdated `last_touched_at`).
 **You:** write the briefs for AEO Studio and your current projects.
 
-### Phase 11 — Dashboard contract views
+### Phase 11 — Re-verify the dashboard views with real data
 **Status:** not started
-> Do Phase 11 of docs/BUILD_PLAN.md (SPEC §11 and ../docs/CONTRACT.md): plan first. Add the four views to `supabase/taskflow_schema.sql` (security_invoker, granted), splitting sessions/shifts/naps/resets across Toronto days in SQL; test on local Postgres with sample data that crosses midnight, includes a day off and two users (RLS). Fill docs/DATA_CONTRACT.md in the same format as ../chart-journal/docs/DATA_CONTRACT.md (columns, how computed, caveats, change log). Run ../supabase/checks.sql (queries 1–8 return nothing; add `taskflow-` to the bucket check). If the dashboard exists, note in ../docs/DECISIONS.md that its unions need TaskFlow added (don't edit dashboard files).
+> The views were built in Phase 4.5. Do Phase 11 of docs/BUILD_PLAN.md: plan first. Now that shifts, paystubs, resets, days off, sleep, inbox and projects exist (phases 5–10), re-run the view tests with fixtures from every one of them, compare a week of my real data against Insights (the numbers must agree), fix any column that is wrong without renaming or reordering (append-only; if a meaning must change, bump `contract_version` and record it), update docs/DATA_CONTRACT.md's change log, and run ../supabase/checks.sql.
 
-**Done when:** the views return correct numbers for the sample data and line up column-for-column with `trading_dashboard_daily`/`_now`.
-**You:** run the schema in the SQL Editor, then `select * from taskflow_dashboard_daily order by day desc limit 7`.
+**Done when:** for one real week, dashboard view totals match TaskFlow Insights for productive, work, sleep and counters.
+**You:** compare the dashboard with Insights for last week.
 
 ### Phase 12 — Photo reading (time cards and paystubs)
 **Status:** not started
