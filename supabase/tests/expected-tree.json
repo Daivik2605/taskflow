@@ -1,0 +1,159 @@
+{
+ "tree": [
+  {
+   "name": "Work",
+   "kind": "work",
+   "emoji": "💼",
+   "children": [
+    {
+     "name": "Tim Hortons",
+     "app_key": null,
+     "emoji": "🍩"
+    },
+    {
+     "name": "Oland Stations",
+     "app_key": null,
+     "emoji": "⛽"
+    },
+    {
+     "name": "Commute",
+     "app_key": null,
+     "emoji": "🚌"
+    }
+   ]
+  },
+  {
+   "name": "Hustle",
+   "kind": "hustle",
+   "emoji": "🚀",
+   "children": [
+    {
+     "name": "AEO Studio",
+     "app_key": null,
+     "emoji": "🧠"
+    }
+   ]
+  },
+  {
+   "name": "Study",
+   "kind": "study",
+   "emoji": "📚",
+   "children": [
+    {
+     "name": "DSA",
+     "app_key": "dsa",
+     "emoji": "🧩"
+    },
+    {
+     "name": "SQL",
+     "app_key": null,
+     "emoji": "🗄️"
+    },
+    {
+     "name": "Trading",
+     "app_key": "trading",
+     "emoji": "📈"
+    },
+    {
+     "name": "Tableau Data Analyst Certification",
+     "app_key": null,
+     "emoji": "📊"
+    },
+    {
+     "name": "Databricks Data Analyst Certification",
+     "app_key": null,
+     "emoji": "🧱"
+    }
+   ]
+  },
+  {
+   "name": "Wellness",
+   "kind": "wellness",
+   "emoji": "🧘",
+   "children": [
+    {
+     "name": "Kriya",
+     "app_key": null,
+     "emoji": "🌬️"
+    },
+    {
+     "name": "Padmasadna",
+     "app_key": null,
+     "emoji": "🪷"
+    },
+    {
+     "name": "Home Workout",
+     "app_key": null,
+     "emoji": "💪"
+    },
+    {
+     "name": "Gym",
+     "app_key": null,
+     "emoji": "🏋️"
+    }
+   ]
+  },
+  {
+   "name": "Break",
+   "kind": "break",
+   "emoji": "☕",
+   "children": []
+  },
+  {
+   "name": "Sleep",
+   "kind": "sleep",
+   "emoji": "😴",
+   "children": []
+  },
+  {
+   "name": "Personal",
+   "kind": "personal",
+   "emoji": "🏠",
+   "children": []
+  }
+ ],
+ "presets": [
+  {
+   "name": "Kriya",
+   "tag": "Wellness/Kriya",
+   "default_minutes": 35
+  },
+  {
+   "name": "Padmasadna",
+   "tag": "Wellness/Padmasadna",
+   "default_minutes": 20
+  }
+ ],
+ "jobs": [
+  {
+   "employer": "Tim Hortons",
+   "tag": "Work/Tim Hortons"
+  },
+  {
+   "employer": "Oland Stations",
+   "tag": "Work/Oland Stations"
+  }
+ ],
+ "counters": [
+  {
+   "name": "Cigarette",
+   "emoji": "🚬"
+  },
+  {
+   "name": "Weed",
+   "emoji": "🌿"
+  }
+ ],
+ "actions": [
+  "Tim Hortons shift",
+  "Oland Stations shift",
+  "Nap + reset",
+  "Kriya",
+  "Padmasadna",
+  "Sleep check-in"
+ ],
+ "project": {
+  "name": "AEO Studio",
+  "tag": "Hustle/AEO Studio"
+ }
+}
