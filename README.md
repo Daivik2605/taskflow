@@ -2,7 +2,7 @@
 
 Tasks, timer, shifts and pay, nap + reset, calendar with days off, inbox and project briefs — one app of PersonalOS. Used on Mac and iPhone. Spec: `docs/SPEC.md`; phases: `docs/BUILD_PLAN.md`; rules for Claude Code: `CLAUDE.md`.
 
-Status: **phase 2** — tasks (sheet, sub-tasks, quick add, filters, reorder), Today with counters, Settings → Areas, realtime task sync. Timer, calendar, inbox, projects and work are placeholders until their phases.
+Status: **phase 2.5** — tags (a two-level tree), task dates (day / window / deadline), cigarette and weed counters, Insights, Today and Tasks views, realtime sync. Timer, calendar, inbox, projects and work are placeholders until their phases.
 
 ## Setup
 1. `npm install`
@@ -17,10 +17,10 @@ To open it on the iPhone before the phase 3 deploy: run `npm run dev`, and visit
 | | |
 |---|---|
 | `npm run dev` | dev server on 5175 |
-| `npm test` | unit and component tests (time, tasks, areas, seed, pay config, theme, shell, Today/Tasks, task sheet) |
+| `npm test` | unit and component tests (time, tasks, tags, counters, insights, seed, pay config, theme, shell, Today / Tasks / Insights, task sheet, counters, settings) |
 | `npm run typecheck` | TypeScript |
 | `npm run build` | production build into `dist/` |
-| `npm run test:schema` | proves the schema: runs it twice (plus once over data) on a throwaway local Postgres with Supabase stand-ins, then checks RLS, isolation, unique indexes, triggers and realtime. Needs Postgres 15+ from Homebrew (`PGBIN` to override). Never touches Supabase. |
+| `npm run test:schema` | proves the schema on a throwaway local Postgres with Supabase stand-ins, never on Supabase: a **fresh install** (schema twice, RLS, isolation, indexes, triggers, tag rules, task dates, counter days across DST, merge, realtime) and the **phase-1 → revision-2 migration** (frozen phase-1 schema + seed + sample work + tags you made yourself → current schema three times → nothing deleted, ids kept, every task/preset/session/note on the right tag, tree equals the new-account seed). Needs Postgres 15+ from Homebrew (`PGBIN` to override). |
 
 ## Pay is not set up yet
 The Tim Hortons job is seeded with **no hourly rate and no pay-period start date**. Wherever pay appears, the app says "Set your rate and pay period in Settings → Jobs" until both are set (phase 6).
@@ -29,3 +29,37 @@ The Tim Hortons job is seeded with **no hourly rate and no pay-period start date
 - `src/lib/` — pure, tested logic (`time.ts` = the only place days are computed, America/Toronto).
 - `src/app/` — shell, navigation, auth, connection banner. `src/screens/` — one file per screen (thin).
 - `supabase/taskflow_schema.sql` — the whole database for this app, extended (never rewritten) by later phases.
+
+## Phase 2.5: run the SQL (existing Supabase project)
+The app code for phase 2.5 needs the new tables and columns. Until you run this it shows a banner, "The database is out of date", instead of loading.
+
+1. **Optional safety copy:** Supabase → Table Editor → `taskflow_areas` and `taskflow_tasks` → export as CSV. (The migration is all-or-nothing, never deletes, and writes a before-image of every row it changes to `taskflow_migration_log`, so this is belt and braces.)
+2. Supabase → SQL Editor → New query → paste the **whole** of `supabase/taskflow_schema.sql` → Run. It needs Postgres 15 or newer (every current Supabase project is); on an older one it stops before changing anything. It's safe to run again — the migration part only runs once.
+3. Then `npm run dev` and sign in.
+
+**What the migration does to your data** (in place, same ids, so tasks, presets, projects and jobs keep their links): DSA, Trading, SQL → Study; Tableau cert and Databricks cert → Study / *Tableau Data Analyst Certification*, *Databricks Data Analyst Certification*; AEO Studio → Hustle; Work — Tim Hortons → Work / Tim Hortons; Wellbeing → Wellness; Life admin → Personal; Sleep stays. Projects, Leisure and People are archived and their tasks, presets, sessions and notes move to Personal, Break and Break. New: the parents Work, Hustle, Study, Break; the sub-tags Oland Stations, Commute, Kriya, Padmasadna, Home Workout, Gym; the presets *Sudarshan Kriya* and *Padmasadhna* become **Kriya** and **Padmasadna** under Wellness; a second job **Oland Stations** (no rate or pay period yet) and its shift button; the counters **Cigarette 🚬** and **Weed 🌿**. Tags you created yourself stay as top-level tags (their kind is mapped); if one has the same name as a new sub-tag it is reused and its tasks keep their link. Existing tasks get **no** start date.
+
+**What to check afterwards** — paste into the SQL Editor (read-only):
+```sql
+-- the tag tree: parents first, each followed by its sub-tags
+select coalesce(p.name, '—') as parent, a.name, a.kind, a.emoji, a.archived
+from taskflow_areas a left join taskflow_areas p on p.id = a.parent_id
+order by coalesce(p.sort, a.sort), (a.parent_id is not null), a.sort;
+
+-- every task and the tag it now has
+select t.title, t.due_on, t.start_on, t.hard_deadline,
+       coalesce(p.name || ' › ' || a.name, a.name) as tag
+from taskflow_tasks t
+left join taskflow_areas a on a.id = t.area_id left join taskflow_areas p on p.id = a.parent_id
+order by t.created_at;
+
+select (select count(*) from taskflow_tasks) as tasks, (select count(*) from taskflow_presets) as presets,
+       (select count(*) from taskflow_jobs) as jobs, (select count(*) from taskflow_counters) as counters,
+       (select count(*) from taskflow_migration_log) as logged_rows;
+```
+You should see: seven parents (Work, Hustle, Study, Wellness, Break, Sleep, Personal) with their sub-tags; Projects, Leisure and People archived; the same number of tasks as before, none with an empty tag unless it had none; 2 jobs, 2 counters, `logged_rows` greater than 0. In the **Table Editor**: `taskflow_jobs` has *Tim Hortons* and *Oland Stations* with empty `hourly_rate` and `pay_period_anchor`; `taskflow_actions` has a *shift:* button for each job and the two presets renamed Kriya and Padmasadna. Then run `../supabase/checks.sql` — queries 1–8 should return nothing for `taskflow_` objects.
+
+## Counters, tags and dates in one minute
+- **Today** starts with the two counter buttons: tap = +1 now with a 5-second **Undo**; long-press (or the … button) adds a tap at a past time (Toronto time) or edits today's taps.
+- **Settings → Tags** is the tree editor (add parent / sub-tag, rename, colour, emoji, reorder, move, archive, merge). **Settings → Counters** adds more counters. **Settings → Week starts on** sets what "this week" means.
+- A task's **When**: *No date*, *On a day*, *Window* (This week · Next 7 days · Next 2 weeks · This month · custom) or *Deadline* (hard, optional "start working from"). A task with a due date and no start day (made before phase 2.5) is active now and shows "N days left".

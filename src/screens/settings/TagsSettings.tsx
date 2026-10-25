@@ -19,6 +19,7 @@ function Editor({ tag, onDone }: { tag: Area; onDone: () => void }) {
   const [confirmMerge, setConfirmMerge] = useState(false)
 
   const hasChildren = areas.some((a) => a.parent_id === tag.id)
+  const activeChildren = areas.some((a) => a.parent_id === tag.id && !a.archived)
   const parents = areas.filter((a) => a.parent_id === null && a.id !== tag.id && !a.archived)
   const targets = areas.filter((a) => a.id !== tag.id && !a.archived && validateMerge(areas, tag.id, a.id) === null)
   const run = async (p: Parameters<typeof update>[1]) => setError(await update(tag.id, p))
@@ -62,12 +63,13 @@ function Editor({ tag, onDone }: { tag: Area; onDone: () => void }) {
       {hasChildren && <p className="text-sm text-slate-500">This tag has sub-tags, so it stays top-level.</p>}
 
       <div className="space-y-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/50">
-        <label className={label}>Merge into another tag
+        {activeChildren && <p className="text-sm text-slate-500">To merge this tag into another, first move or archive its sub-tags.</p>}
+        {!activeChildren && <label className={label}>Merge into another tag
           <select className={`${select} mt-1`} value={mergeInto} onChange={(e) => { setMergeInto(e.target.value); setConfirmMerge(false) }} aria-label="Merge into">
             <option value="">Choose a tag…</option>
             {targets.map((t) => <option key={t.id} value={t.id}>{tagPath(areas, t.id)}</option>)}
           </select>
-        </label>
+        </label>}
         {mergeInto && !confirmMerge && <button className={btn} disabled={writesDisabled} onClick={() => setConfirmMerge(true)}>Merge…</button>}
         {mergeInto && confirmMerge && (
           <div className="flex flex-wrap items-center gap-2 text-sm">

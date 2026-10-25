@@ -1,6 +1,6 @@
 # TaskFlow — build plan (one phase per Claude Code session)
 
-How to run a phase: open a terminal in `PersonalOS/taskflow/`, start Claude Code (for API-credit billing: `ANTHROPIC_API_KEY=sk-ant-... claude` — inline, not `export`), then paste the phase's prompt. Claude Code plans first and waits for your OK.
+How to run a phase: open a terminal in `PersonalOS/taskflow/`, start Claude Code with plain `claude` (it uses my Claude subscription; make sure `ANTHROPIC_API_KEY` is **not** set in the shell, or it bills API credits instead), then paste the phase's prompt. Claude Code plans first and waits for your OK.
 
 Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passing, the **Status** line below updated, and a hand-check list for Mac + iPhone. SPEC = `docs/SPEC.md`.
 
@@ -10,7 +10,7 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 **Status:** not started
 1. This folder already has `CLAUDE.md` and `docs/`. Run `git init` here (it's its own repo; the root repo ignores it).
 2. Supabase (the one `personal-os` project): Authentication → Email → "Confirm email" is **off** (already, from the other apps). Copy the Project URL and anon key — you'll paste them into `.env.local` in phase 1.
-3. Make an Anthropic API key at platform.claude.com if you want this app built on API credits.
+3. Claude Code runs on my Claude subscription (`/status` shows which login it uses). An Anthropic API key is only needed in phase 12, as a Supabase secret for the photo-reading function — that's the app calling Claude, not Claude Code.
 
 ### Phase 1 — Scaffold, full schema, sign-in, seed
 **Status:** built — pending your checks (run the schema in the SQL Editor, sign in on the Mac and iPhone, look at the tables). `npm test` (44), `typecheck`, `build` and `test:schema` pass.
@@ -28,7 +28,7 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 **You:** add your real tasks; check the counts make sense.
 
 ### Phase 2.5 — Tags, task dates, smoke counters, Insights (revision 2)
-**Status:** not started
+**Status:** built — pending you running the SQL and checking (steps in README → "Phase 2.5: run the SQL"). `npm test` (292), `typecheck`, `build` and `npm run test:schema` (fresh install + phase-1 → revision-2 migration, both run three times) pass. The new app code needs the new SQL first; until it's run the app says "The database is out of date".
 > Read docs/SPEC.md — the "What TaskFlow must answer" and "Words used" notes at the top, §2 (changed rows), §2b, §3, §13 and §14 — then do Phase 2.5 of docs/BUILD_PLAN.md: plan first and wait for my approval. This changes data that already exists in my real Supabase project, so the migration must be safe.
 >
 > **1. Schema (extend `supabase/taskflow_schema.sql`, idempotent, never drops data):**
@@ -67,6 +67,13 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 **Done when:** after running the schema in my real project, my existing tasks keep their (renamed) tags, "Pass G2" can be set to a hard deadline on 9 Nov and shows its countdown; a "next 2 weeks" window task shows days left and becomes *missed* when its window ends; tasks missed and deadlines missed are counted separately; tapping 🚬 on the phone shows +1 on the Mac within seconds and Undo removes it; Insights shows per-day/week/month counter totals.
 **You:** run the schema, open Settings → Tags and check the tree, retag your tasks, tap the counters for a day, look at Insights.
 
+### Phase 2.6 — Overview strip
+**Status:** not started
+> Do Phase 2.6 of docs/BUILD_PLAN.md (SPEC §3, "Overview strip"): plan first. Add the overview strip to the top of Today with the Today · Week · Month toggle (remembered per device), cards for To do, Due today, Upcoming, Deadlines (nearest named), Missed (tasks / deadlines), Completed, 🚬 and 🌿 with change vs the previous period. Each card opens the matching Tasks view or Insights → Counters. Compute everything with the existing pure functions in `tasks.ts` / `counters.ts` (add a `overview.ts` that composes them, with tests that its numbers equal Insights' for the same range). Leave a slot for the Time card that phase 4 fills. 2-column grid on phone, one row on desktop, loading skeletons, live updates via the existing realtime subscriptions. No schema change.
+
+**Done when:** the numbers match Insights for today, this week and this month; tapping 🚬 updates its card immediately; every card opens the right filtered view.
+**You:** look at it on the phone layout (narrow the browser) and check every number against your tasks.
+
 ### Phase 3 — PWA + deploy (makes it usable on the iPhone)
 **Status:** not started
 > Do Phase 3 of docs/BUILD_PLAN.md (SPEC §1): plan first. vite-plugin-pwa with manifest, icons (simple generated icon), standalone display, theme colours, a `/capture` home-screen shortcut route (placeholder until phase 9), update prompt when a new version is deployed. Deploy config for Vercel (or Netlify — recommend one), SPA rewrites, env vars documented. Write the exact click-by-click steps for me: create the hosting project from this repo or via CLI, set env vars, add the deployed URL to Supabase → Authentication → URL Configuration, install on iPhone (Safari → Share → Add to Home Screen) and on Mac. Store the deployed URL in `taskflow_settings.taskflow_url`.
@@ -76,14 +83,14 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 
 ### Phase 4 — Timer + presets
 **Status:** not started
-> Do Phase 4 of docs/BUILD_PLAN.md (SPEC §4, §2b, §14): plan first. Timer screen with Start/Pause/Resume/Stop, tag (via the tag picker) + optional task, a ▶ button on every task row that starts the timer on that task with its tag, logged time and estimate-vs-actual on tasks, live comment, segments model, one active session rule (DB index + UI prompt), running bar on every screen, quick-log presets, add past session, today's sessions list with edit/delete, totals per parent tag and sub-tag for today and this week. Extend **Insights**: the Day log timeline gains sessions and presets; Range gains hours by parent/sub-tag (stacked bar per day), hours studying per study sub-tag, top tasks by time, estimate vs actual. `src/lib/timer.ts` with tests (pause/resume sums, open segment, sessions across midnight). Realtime: start on one device, pause on the other. Settings → Presets.
+> Do Phase 4 of docs/BUILD_PLAN.md (SPEC §4, §2b, §14): plan first. Timer screen with Start/Pause/Resume/Stop, tag (via the tag picker) + optional task, a ▶ button on every task row that starts the timer on that task with its tag, logged time and estimate-vs-actual on tasks, live comment, segments model, one active session rule (DB index + UI prompt), running bar on every screen, quick-log presets, add past session, today's sessions list with edit/delete, totals per parent tag and sub-tag for today and this week. Fill the overview strip's **Time** card (study, hustle, work hours for the period). Extend **Insights**: the Day log timeline gains sessions and presets; Range gains hours by parent/sub-tag (stacked bar per day), hours studying per study sub-tag, top tasks by time, estimate vs actual. `src/lib/timer.ts` with tests (pause/resume sums, open segment, sessions across midnight). Realtime: start on one device, pause on the other. Settings → Presets.
 
 **Done when:** start on Mac → pause/resume → stop on phone with a comment; duration correct; closing and reopening the app keeps the timer; a preset tap logs its minutes.
 **You:** use it for a real study session (started from a task) and a Kriya log; check Insights → Day.
 
 ### Phase 4.5 — Dashboard contract views (moved up from phase 11 so the dashboard can start early)
 **Status:** not started
-> Do Phase 4.5 of docs/BUILD_PLAN.md (SPEC §11 and ../docs/CONTRACT.md): plan first. Add the four views (`taskflow_dashboard_daily`, `_now`, `_area_daily`, `_days_off`) to `supabase/taskflow_schema.sql` (security_invoker, granted to authenticated, append-only once released), splitting sessions, shifts, naps and resets across Toronto days in SQL. All the tables already exist from phase 1, so write **every** column from SPEC §11 now, even for features not built yet (shifts, resets, sleep, days off): they return 0/null until those phases add data. Test on local Postgres with fixture rows for every source (including a shift and a reset), a session crossing midnight, a DST day, a day off and two users (RLS). Fill docs/DATA_CONTRACT.md in the same format as ../chart-journal/docs/DATA_CONTRACT.md (columns, how computed, caveats, change log). Run ../supabase/checks.sql (queries 1–8 return nothing). Note in ../docs/DECISIONS.md that the views are released. Don't edit dashboard files.
+> Do Phase 4.5 of docs/BUILD_PLAN.md (SPEC §11 and ../docs/CONTRACT.md): plan first. Add the five views (`taskflow_dashboard_daily`, `_now`, `_area_daily`, `_days_off`, `_deadlines`) to `supabase/taskflow_schema.sql` (security_invoker, granted to authenticated, append-only once released), splitting sessions, shifts, naps and resets across Toronto days in SQL. All the tables already exist from phase 1, so write **every** column from SPEC §11 now, even for features not built yet (shifts, resets, sleep, days off): they return 0/null until those phases add data. Test on local Postgres with fixture rows for every source (including a shift and a reset), a session crossing midnight, a DST day, a day off and two users (RLS). Make the deep-link routes from SPEC §11 work (`/timer?tag=` pre-selects the tag without starting). Fill docs/DATA_CONTRACT.md in the same format as ../chart-journal/docs/DATA_CONTRACT.md (columns, how computed, caveats, change log, deep links). Run ../supabase/checks.sql (queries 1–8 return nothing). Note in ../docs/DECISIONS.md that the views are released. Don't edit dashboard files.
 
 **Done when:** the views return correct numbers for the fixtures and line up column-for-column with `trading_dashboard_daily`/`_now`; `select * from taskflow_dashboard_daily order by day desc limit 7` shows today's study minutes from a real timer session.
 **You:** run the schema in the SQL Editor, run that query. Then the dashboard can be built (`../docs/prompts/04-dashboard.md`) while TaskFlow continues with phase 5.
@@ -104,7 +111,7 @@ Every phase ends with `npm test`, `npm run typecheck` and `npm run build` passin
 
 ### Phase 7 — Pay periods + paystubs
 **Status:** not started
-> Do Phase 7 of docs/BUILD_PLAN.md (SPEC §6.4): plan first. Work screen → pay periods from the job's anchor and length, each with its shifts (unverified first), my regular/overtime paid minutes and expected gross; paystub entry with optional photo/PDF upload to the `taskflow-paystubs` bucket (signed URLs to view); side-by-side comparison with tolerance (settings); tests for period boundaries and overtime split across periods.
+> Do Phase 7 of docs/BUILD_PLAN.md (SPEC §6.4): plan first. Work screen → pay periods from the job's anchor and length, each with its shifts (unverified first), my regular/overtime paid minutes and expected gross; paystub entry with optional photo/PDF upload to the `taskflow-paystubs` bucket (signed URLs to view); side-by-side comparison with tolerance (settings); tests for period boundaries and overtime split across periods. Also add the view `taskflow_dashboard_paystubs` from SPEC §11 (security_invoker, granted, append-only; cents as integers), tested on local Postgres, and document it in docs/DATA_CONTRACT.md — the Money app reads it.
 
 **Done when:** a period's expected gross matches a hand calculation, and entering a real paystub shows the difference.
 **You:** enter your last paystub and compare.

@@ -89,7 +89,17 @@ Seeded tree (editable in **Settings → Tags**: add parent / add sub-tag, rename
 - **Time per task:** a ▶ button on every task row starts the timer on that task (with its tag); the task shows total logged time and estimate vs actual.
 - **Counters:** done · missed · deadlines missed · left — for today, this week, this month, all time (left = active open tasks).
 - **Tasks screen:** views **Today · Upcoming · Deadlines · Anytime · Done**, filters (tag — a parent includes its sub-tags, project, owner, status, label), grouped by due date; swipe or button to complete; drag/button reorder within a group.
-- **Today screen:** smoke counter buttons (§13), pinned action buttons (§5), running timer bar, sleep check-in card (§8) if not logged, tasks: missed (to reschedule or drop) · deadlines coming up · today · in a window · no date, counters, quick-capture button (§9), "going cold" projects (§10).
+- **Overview strip** (top of Today, revision 3): tappable cards, each opening the matching filtered view, with a **Today · Week · Month** toggle:
+  - **To do** — active open tasks (today + in a window + no date)
+  - **Due today** — due or planned for today
+  - **Upcoming** — not started yet (future `start_on`)
+  - **Deadlines** — hard deadlines in the next 14 days, with the nearest one named ("G2 in 16 days")
+  - **Missed** — open missed tasks + deadlines missed (two numbers)
+  - **Completed** — done in the period (late ones counted too)
+  - **🚬 / 🌿** — count in the period, with the change vs the previous period (▲ 3 / ▼ 2)
+  - **Time** (from phase 4) — hours studying, hustle, at work in the period
+  Phone: a 2-column grid of compact cards; desktop: one row. Numbers come from the same pure functions as Insights, so the two never disagree.
+- **Today screen:** overview strip, smoke counter buttons (§13), pinned action buttons (§5), running timer bar, sleep check-in card (§8) if not logged, tasks: missed (to reschedule or drop) · deadlines coming up · today · in a window · no date, counters, quick-capture button (§9), "going cold" projects (§10).
 - Test example: *Pass G2 — due 2026-11-09 — Life admin.*
 
 ## 4. Timer
@@ -171,6 +181,9 @@ Sessions, shifts, naps and resets that cross midnight are split across Toronto d
 - **`taskflow_dashboard_now`**: `status_line` e.g. `4 left today · 2 overdue · ⏱ DSA 25m`; `needs_attention` = overdue tasks + unverified shifts older than 14 days; `attention_label` = `overdue tasks / unchecked shifts`. Extras: `open_tasks`, `overdue_tasks`, `inbox_count`, `running_area`, `running_since`, `reset_running_since`, `on_shift_since`, `cold_projects`.
 - **`taskflow_dashboard_area_daily`** (user_id, day, parent_tag, tag, kind, app_key, minutes) — for the per-area chart and the max-rule against app-measured minutes.
 - **`taskflow_dashboard_days_off`** (user_id, day, kind, label).
+- **`taskflow_dashboard_paystubs`** (user_id, job_id, employer, period_start, period_end, pay_date, gross_pay_cents, net_pay_cents, paid_minutes) — one row per paystub entered; read by the Money app to match payroll deposits (`../../money/docs/SPEC.md` §7). Added in phase 7.
+- **`taskflow_dashboard_deadlines`** (user_id, task_id, title, tag, due_on, days_left, hard_deadline) — open tasks with `hard_deadline` due in the next 60 days (cert exam dates, "Pass G2"); feeds the countdowns on PersonalOS Home. Requested by `../../dashboard/docs/SPEC.md` §2.3.
+- **Deep links** PersonalOS Home opens (keep these routes stable; document them in `docs/DATA_CONTRACT.md`): `/timer?tag=<parent/sub-tag path>` (opens the timer with that tag picked, doesn't auto-start), `/tasks?view=today`, `/insights`, `/work`, `/capture`.
 - All views `security_invoker`, granted to `authenticated`, append-only after release.
 
 ## 13. Counters (cigarettes, weed — replaces the planned Smoke app)

@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ConnectionBanner } from './ConnectionBanner'
 import { Icon } from './Icon'
 import { MORE, MORE_PATHS, TABS, type NavItem } from './nav'
@@ -14,16 +14,18 @@ export function Shell() {
 
   return (
     <div className="flex h-full flex-col lg:flex-row">
-      <aside className="hidden w-60 shrink-0 flex-col gap-1 border-r border-slate-200 p-3 dark:border-slate-800 lg:flex" aria-label="Main">
+      <aside className="hidden w-60 shrink-0 flex-col gap-1 border-r border-slate-200 p-3 dark:border-slate-800 lg:flex">
         <div className="px-3 py-3 text-lg font-semibold">TaskFlow</div>
-        {sidebar.map((n, i) => (
-          <div key={n.to}>
-            {i === TABS.length - 1 && <div className="my-2 border-t border-slate-200 dark:border-slate-800" />}
-            <NavLink to={n.to} end={n.to === '/'} className={sideLink}>
-              <Icon name={n.icon} className="h-5 w-5" />{n.label}
-            </NavLink>
-          </div>
-        ))}
+        <nav aria-label="Sidebar" className="flex flex-col gap-1">
+          {sidebar.map((n, i) => (
+            <div key={n.to}>
+              {i === TABS.length - 1 && <div className="my-2 border-t border-slate-200 dark:border-slate-800" />}
+              <NavLink to={n.to} end={n.to === '/'} className={sideLink}>
+                <Icon name={n.icon} className="h-5 w-5" />{n.label}
+              </NavLink>
+            </div>
+          ))}
+        </nav>
       </aside>
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -35,10 +37,11 @@ export function Shell() {
           {TABS.map((t) => {
             const active = t.to === '/more' ? MORE_PATHS.includes(pathname) : t.to === '/' ? pathname === '/' : pathname.startsWith(t.to)
             return (
-              <NavLink key={t.to} to={t.to} aria-current={active ? 'page' : undefined}
+              // Link, not NavLink: "More" must read as current on every page under it, which NavLink can't express.
+              <Link key={t.to} to={t.to} aria-current={active ? 'page' : undefined}
                 className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-medium ${active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}`}>
                 <Icon name={t.icon} />{t.label}
-              </NavLink>
+              </Link>
             )
           })}
         </nav>
