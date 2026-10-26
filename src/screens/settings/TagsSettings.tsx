@@ -6,7 +6,7 @@ import { TagLabel } from '../../components/TagLabel'
 import { btn, btnDanger, btnPrimary, card, input, label, select, sectionTitle } from '../../components/ui'
 import { useAreas } from '../../data/areas'
 import { AREA_COLORS, TAG_KINDS, type Area, type TagKind } from '../../lib/areas'
-import { buildTree, siblingsOf, tagPath, validateMerge } from '../../lib/tags'
+import { buildTree, siblingsOf, tagPath, tagPurpose, validateMerge } from '../../lib/tags'
 import { reorderWithin } from '../../lib/tasks'
 import { Swatches } from './Swatches'
 
@@ -37,7 +37,7 @@ function Editor({ tag, onDone }: { tag: Area; onDone: () => void }) {
 
       <label className="flex min-h-11 items-center gap-3 text-sm font-medium">
         <input type="checkbox" className="h-5 w-5" checked={tag.show_for_tasks} disabled={writesDisabled} onChange={(e) => void run({ show_for_tasks: e.target.checked })} />
-        <span>Offer on tasks <span className="font-normal text-slate-500">(task sheet and quick add; the timer always lists every tag)</span></span>
+        <span>Show when adding a task <span className="font-normal text-slate-500">(task sheet and quick add; "More tags…" and the timer always list every tag)</span></span>
       </label>
 
       <div><span className={label}>Colour</span><div className="mt-1"><Swatches value={tag.color} onPick={(c) => void run({ color: c })} /></div></div>
@@ -139,6 +139,7 @@ export function TagsSettings() {
       <div className={`flex items-center gap-1 pr-2 ${indent ? 'pl-8' : 'pl-3'}`}>
         <button className="min-h-12 min-w-0 flex-1 text-left" onClick={() => setEditing(editing === a.id ? null : a.id)} aria-expanded={editing === a.id} aria-label={`Edit ${a.name}`}>
           <span className={`block truncate ${indent ? '' : 'font-semibold'}`}><TagLabel tag={a} /></span>
+          <span className="block text-xs text-slate-500">{tagPurpose(a)}</span>
           <span className="block text-xs text-slate-500">{[indent ? '' : TAG_KINDS.find((k) => k.value === a.kind)?.label, a.app_key ? `linked to ${a.app_key}` : '', a.show_for_tasks ? 'on tasks' : ''].filter(Boolean).join(' · ')}</span>
         </button>
         <button aria-label={`Move up: ${a.name}`} disabled={i === 0 || writesDisabled} onClick={() => move(a, 'up')} className="flex h-11 w-10 items-center justify-center text-slate-500 disabled:opacity-25"><Icon name="up" className="h-5 w-5" /></button>

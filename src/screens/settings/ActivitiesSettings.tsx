@@ -46,6 +46,10 @@ function Editor({ activity, onDone }: { activity: Activity; onDone: () => void }
   return (
     <div className="space-y-3 border-t border-slate-100 p-3 dark:border-slate-800">
       <Fields {...{ name, setName, tag, setTag, minutes, setMinutes, target, setTarget }} />
+      <label className="flex min-h-11 items-center gap-3 text-sm font-medium">
+        <input type="checkbox" className="h-5 w-5" checked={activity.allow_multiple} disabled={writesDisabled} onChange={async (e) => setError(await update(activity.id, { allow_multiple: e.target.checked }))} />
+        <span>Can be done more than once a day <span className="font-normal text-slate-500">(off: one tap a day, and tapping again takes it back)</span></span>
+      </label>
       <Link to={`/settings?goal=activity_count:${activity.id}`} className="inline-block text-sm text-indigo-600 dark:text-indigo-400">Set a goal for {activity.name} →</Link>
       {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex flex-wrap gap-2">

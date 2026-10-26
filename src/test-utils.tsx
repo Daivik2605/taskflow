@@ -11,7 +11,7 @@ import { CountersContext, type CountersApi } from './data/counters'
 import { GoalsContext, type GoalsApi } from './data/goals'
 import type { Goal } from './lib/goals'
 import { ProjectsContext } from './data/projects'
-import { SettingsContext } from './data/settings'
+import { SettingsContext, type SettingsApi } from './data/settings'
 import { TasksContext, type TasksApi } from './data/tasks'
 import type { Area } from './lib/areas'
 import type { Activity, ActivityLog } from './lib/activities'
@@ -58,8 +58,8 @@ export function fakeCountersApi(counters: Counter[] = COUNTERS, events: CounterE
 }
 
 export const ACTIVITIES: Activity[] = [
-  { id: 'act-kriya', name: 'Kriya', area_id: 'a-study', default_minutes: 35, weekly_target: null, sort: 0, archived: false },
-  { id: 'act-gym', name: 'Gym', area_id: 'a-work', default_minutes: 60, weekly_target: 3, sort: 1, archived: false },
+  { id: 'act-kriya', name: 'Kriya', area_id: 'a-study', default_minutes: 35, weekly_target: null, allow_multiple: false, sort: 0, archived: false },
+  { id: 'act-gym', name: 'Gym', area_id: 'a-work', default_minutes: 60, weekly_target: 3, allow_multiple: false, sort: 1, archived: false },
 ]
 
 export function fakeActivitiesApi(activities: Activity[] = ACTIVITIES, logs: ActivityLog[] = [], over: Partial<ActivitiesApi> = {}): ActivitiesApi {
@@ -83,7 +83,7 @@ interface Opts {
   areas?: Area[]; areasApi?: AreasApi
   counters?: Counter[]; events?: CounterEvent[]; countersApi?: CountersApi
   activities?: Activity[]; logs?: ActivityLog[]; activitiesApi?: ActivitiesApi
-  route?: string; weekStartsOn?: number
+  route?: string; weekStartsOn?: number; hideUnfinished?: boolean; settingsApi?: Partial<SettingsApi>
 }
 
 export function renderApp(ui: ReactElement, o: Opts = {}) {
@@ -96,7 +96,7 @@ export function renderApp(ui: ReactElement, o: Opts = {}) {
     <ConnectionProvider>
       <MemoryRouter initialEntries={[o.route ?? '/']}>
         <ToastProvider>
-          <SettingsContext.Provider value={{ weekStartsOn: o.weekStartsOn ?? 1, setWeekStartsOn: vi.fn(async () => {}) }}>
+          <SettingsContext.Provider value={{ weekStartsOn: o.weekStartsOn ?? 1, setWeekStartsOn: vi.fn(async () => {}), hideUnfinished: o.hideUnfinished ?? true, setHideUnfinished: vi.fn(async () => {}), ...o.settingsApi }}>
             <AreasContext.Provider value={areasApi}>
               <ProjectsContext.Provider value={[{ id: 'p-aeo', name: 'AEO Studio', status: 'active' }]}>
                 <CountersContext.Provider value={countersApi}>

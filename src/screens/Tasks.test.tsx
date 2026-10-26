@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildNewTask } from '../lib/tasks'
 import { fakeTasksApi, makeDone, makeTask, polyfillDialog, renderApp } from '../test-utils'
 import { Tasks } from './Tasks'
 
@@ -99,5 +100,66 @@ describe('Tasks screen ordering', () => {
   it('groups sorted by date (deadlines, missed) have no reorder buttons', () => {
     renderApp(<Tasks />, { tasks: tasks(), route: '/tasks?view=deadlines' })
     expect(screen.queryByRole('button', { name: /Move up/ })).toBeNull()
+  })
+})
+
+describe('Tasks screen quick add follows the view', () => {
+  const addApi = () => fakeTasksApi([], { add: vi.fn(async (input) => buildNewTask(input, 10, new Date(), 'new-id')) })
+  const type = async (title: string) => userEvent.type(screen.getByLabelText('Task title'), `${title}{Enter}`)
+
+  it('Today: pre-fills today, and the task shows with no "Added to" toast', async () => {
+    const api = addApi()
+    renderApp(<Tasks />, { api, route: '/tasks' })
+    expect(screen.getByLabelText('Day (optional)')).toHaveValue('2026-11-10')
+    await type('Pay rent')
+    expect(api.add).toHaveBeenCalledWith({ title: 'Pay rent', due_on: '2026-11-10', area_id: null, hard_deadline: false })
+    expect(screen.queryByText(/^Added to/)).toBeNull()
+  })
+  it('Upcoming: pre-fills tomorrow, and the task shows there', async () => {
+    const api = addApi()
+    renderApp(<Tasks />, { api, route: '/tasks?view=upcoming' })
+    expect(screen.getByLabelText('Day (optional)')).toHaveValue('2026-11-11')
+    await type('Dentist')
+    expect(api.add).toHaveBeenCalledWith({ title: 'Dentist', due_on: '2026-11-11', area_id: null, hard_deadline: false })
+    expect(screen.queryByText(/^Added to/)).toBeNull()
+  })
+  it('Deadlines: asks for a deadline day, will not add without one, and adds a hard deadline', async () => {
+    const api = addApi()
+    renderApp(<Tasks />, { api, route: '/tasks?view=deadlines' })
+    const day = screen.getByLabelText('Deadline day')
+    expect(day).toHaveValue('')
+    await userEvent.type(screen.getByLabelText('Task title'), 'Pass G2')
+    expect(screen.getByRole('button', { name: 'Add task' })).toBeDisabled()
+    await userEvent.type(day, '2026-12-01')
+    await userEvent.click(screen.getByRole('button', { name: 'Add task' }))
+    expect(api.add).toHaveBeenCalledWith({ title: 'Pass G2', due_on: '2026-12-01', area_id: null, hard_deadline: true })
+    expect(screen.queryByText(/^Added to/)).toBeNull()
+  })
+  it('Anytime: no day, and the task shows there', async () => {
+    const api = addApi()
+    renderApp(<Tasks />, { api, route: '/tasks?view=anytime' })
+    expect(screen.getByLabelText('Day (optional)')).toHaveValue('')
+    await type('Research vector DBs')
+    expect(api.add).toHaveBeenCalledWith({ title: 'Research vector DBs', due_on: null, area_id: null, hard_deadline: false })
+    expect(screen.queryByText(/^Added to/)).toBeNull()
+  })
+  it('Done: adds undated, says "Added to Anytime", and the button switches to that view', async () => {
+    const api = addApi()
+    renderApp(<Tasks />, { api, route: '/tasks?view=done' })
+    await type('Call bank')
+    expect(screen.getByRole('status')).toHaveTextContent('Added to Anytime')
+    await userEvent.click(screen.getByRole('button', { name: 'Show Anytime' }))
+    expect(screen.getByRole('tab', { name: 'Anytime' })).toHaveAttribute('aria-selected', 'true')
+  })
+  it('Today with another day typed: "Added to Upcoming" and the button switches', async () => {
+    const api = addApi()
+    renderApp(<Tasks />, { api, route: '/tasks' })
+    const day = screen.getByLabelText('Day (optional)')
+    await userEvent.clear(day)
+    await userEvent.type(day, '2026-11-20')
+    await type('Later thing')
+    expect(screen.getByRole('status')).toHaveTextContent('Added to Upcoming')
+    await userEvent.click(screen.getByRole('button', { name: 'Show Upcoming' }))
+    expect(screen.getByRole('tab', { name: 'Upcoming' })).toHaveAttribute('aria-selected', 'true')
   })
 })

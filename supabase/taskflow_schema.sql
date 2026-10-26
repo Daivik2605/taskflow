@@ -985,3 +985,8 @@ begin
     alter publication supabase_realtime add table public.taskflow_goals;
   end if;
 end $$;
+
+-- Phase 3.7: activities can allow more than one log a day (default off: a tap on a done button takes it back),
+-- and the phone's More list can hide screens that are still placeholders (default on).
+alter table public.taskflow_presets  add column if not exists allow_multiple boolean not null default false;
+alter table public.taskflow_settings add column if not exists hide_unfinished_screens boolean not null default true;

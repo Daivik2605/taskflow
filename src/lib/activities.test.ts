@@ -4,7 +4,7 @@ import {
   weekCount, weekLabel, weekLogs, type Activity, type ActivityLog,
 } from './activities'
 
-const act = (over: Partial<Activity> = {}): Activity => ({ id: 'gym', name: 'Gym', area_id: 'tag-gym', default_minutes: 60, weekly_target: null, sort: 0, archived: false, ...over })
+const act = (over: Partial<Activity> = {}): Activity => ({ id: 'gym', name: 'Gym', area_id: 'tag-gym', default_minutes: 60, weekly_target: null, allow_multiple: false, sort: 0, archived: false, ...over })
 const log = (id: string, ended: string, minutes = 60, preset = 'gym', area = 'tag-gym'): ActivityLog => buildLog({ id: preset, area_id: area }, minutes, ended, id)
 
 describe('buildLog', () => {
@@ -107,5 +107,19 @@ describe('lists and realtime', () => {
     expect(applyLogChange([], { type: 'INSERT', row: { ...row, source: 'timer' } })).toHaveLength(0)
     expect(applyLogChange([], { type: 'INSERT', row: { ...row, state: 'running' } })).toHaveLength(0)
     expect(applyLogChange(applyLogChange([], { type: 'INSERT', row }), { type: 'UPDATE', row })).toHaveLength(1) // an echo doesn't duplicate
+  })
+})
+
+describe('tapAction / todayLogs (phase 3.7)', () => {
+  const l1 = log('a', '2026-11-10T13:00:00Z'), l2 = log('b', '2026-11-10T15:00:00Z'), old = log('c', '2026-11-09T15:00:00Z')
+  it('todayLogs: only today, newest first', async () => {
+    const { todayLogs } = await import('./activities')
+    expect(todayLogs([l1, l2, old], 'gym', '2026-11-10').map((l) => l.id)).toEqual(['b', 'a'])
+  })
+  it('first tap of the day logs; a tap on a done activity un-logs the latest; multi logs again', async () => {
+    const { tapAction } = await import('./activities')
+    expect(tapAction({ allow_multiple: false }, [old], 'gym', '2026-11-10')).toEqual({ kind: 'log' })
+    expect(tapAction({ allow_multiple: false }, [l1, l2], 'gym', '2026-11-10')).toEqual({ kind: 'unlog', log: l2 })
+    expect(tapAction({ allow_multiple: true }, [l1, l2], 'gym', '2026-11-10')).toEqual({ kind: 'log' })
   })
 })

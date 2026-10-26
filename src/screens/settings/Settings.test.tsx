@@ -7,6 +7,9 @@ import { ACTIVITIES, fakeActivitiesApi } from '../../test-utils'
 import { ActivitiesSettings } from './ActivitiesSettings'
 import { CountersSettings } from './CountersSettings'
 import { TagsSettings } from './TagsSettings'
+import { Settings } from '../Settings'
+
+vi.mock('../../app/auth', () => ({ useAuth: () => ({ session: { user: { email: 'me@example.com' } }, signOut: vi.fn() }) }))
 
 const edit = (name: string) => userEvent.click(screen.getByRole('button', { name: `Edit ${name}` }))
 
@@ -168,7 +171,7 @@ describe('Settings → Tags, offer on tasks', () => {
   it('toggles whether a tag is offered on tasks', async () => {
     const { areasApi } = renderApp(<TagsSettings />)
     await edit('SQL')
-    const box = screen.getByRole('checkbox', { name: /Offer on tasks/ })
+    const box = screen.getByRole('checkbox', { name: /Show when adding a task/ })
     expect(box).not.toBeChecked()
     await userEvent.click(box)
     expect(areasApi.update).toHaveBeenCalledWith('a-sql', { show_for_tasks: true })
@@ -176,7 +179,7 @@ describe('Settings → Tags, offer on tasks', () => {
   it('shows a flagged tag as checked and has no emoji field', async () => {
     renderApp(<TagsSettings />)
     await edit('DSA')
-    expect(screen.getByRole('checkbox', { name: /Offer on tasks/ })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /Show when adding a task/ })).toBeChecked()
     expect(screen.queryByLabelText('Emoji')).toBeNull()
   })
 })
@@ -272,5 +275,36 @@ describe('Settings → Counters → reasons', () => {
     renderApp(<CountersSettings />)
     await edit('Weed')
     expect(within(screen.getByRole('group', { name: 'Reasons for Weed' })).getByText(/No chips are shown/)).toBeInTheDocument()
+  })
+})
+
+describe('Settings → Tags, what each tag is for (phase 3.7)', () => {
+  it('says in one line what each tag is used for', () => {
+    renderApp(<TagsSettings />)
+    expect(screen.getAllByText(/Learning; counts as productive time/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Paid work and commute/)).toBeInTheDocument()
+    expect(screen.getByText(/Time from dsa lands here/)).toBeInTheDocument()
+  })
+})
+
+describe('Settings → Activities, more than once a day', () => {
+  it('toggles the per-activity setting', async () => {
+    const { activitiesApi } = renderApp(<ActivitiesSettings />, { activities: ACTIVITIES })
+    await edit('Kriya')
+    const box = screen.getByRole('checkbox', { name: /Can be done more than once a day/ })
+    expect(box).not.toBeChecked()
+    await userEvent.click(box)
+    expect(activitiesApi.update).toHaveBeenCalledWith('act-kriya', { allow_multiple: true })
+  })
+})
+
+describe('Settings → Screens', () => {
+  it('Hide unfinished screens is on by default and can be switched off', async () => {
+    const setHideUnfinished = vi.fn(async () => {})
+    renderApp(<Settings />, { settingsApi: { setHideUnfinished } })
+    const box = screen.getByRole('checkbox', { name: /Hide unfinished screens/ })
+    expect(box).toBeChecked()
+    await userEvent.click(box)
+    expect(setHideUnfinished).toHaveBeenCalledWith(false)
   })
 })

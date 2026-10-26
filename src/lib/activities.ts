@@ -10,6 +10,8 @@ export interface Activity {
   area_id: string
   default_minutes: number
   weekly_target: number | null
+  /** Off (default): one tap a day, and a tap on a done button un-logs it. On: every tap is another session. */
+  allow_multiple: boolean
   sort: number
   archived: boolean
 }
@@ -65,6 +67,16 @@ export function weekLogs(logs: ActivityLog[], activityId: string, today: Day, we
 }
 
 export const weekCount = (logs: ActivityLog[], activityId: string, today: Day, weekStart = 1) => weekLogs(logs, activityId, today, weekStart).length
+/** Today's logs of one activity, newest first. */
+export const todayLogs = (logs: ActivityLog[], activityId: string, today: Day) =>
+  logsOf(logs, activityId).filter((l) => logDay(l) === today).sort((a, b) => b.ended_at.localeCompare(a.ended_at))
+
+/** What a tap does: log (first of the day, or the setting allows more) or take back today's latest log. */
+export function tapAction(a: Pick<Activity, 'allow_multiple'>, logs: ActivityLog[], activityId: string, today: Day): { kind: 'log' } | { kind: 'unlog'; log: ActivityLog } {
+  const latest = todayLogs(logs, activityId, today)[0]
+  return latest && !a.allow_multiple ? { kind: 'unlog', log: latest } : { kind: 'log' }
+}
+
 export const doneToday = (logs: ActivityLog[], activityId: string, today: Day) => logsOf(logs, activityId).some((l) => logDay(l) === today)
 
 /** "2 this week", or "2/3 this week" with a target. */

@@ -19,11 +19,14 @@ interface Props {
 export function TagPicker({ value, onChange, allowNone = false, tasksOnly = false, label = 'Tag' }: Props) {
   const { areas } = useAreas()
   const [open, setOpen] = useState(false)
+  const [more, setMore] = useState(false)
   const listId = useId()
   const current = areas.find((a) => a.id === value) ?? null
   const parent = parentOf(areas, value)
   // Read the recent list each time the panel opens, so a pick made elsewhere shows up.
-  const { recent, groups } = useMemo(() => orderForPicker(areas, open ? getRecentTags() : [], { tasksOnly, keepId: value }), [areas, open, tasksOnly, value])
+  // "More tags…" lifts the shortlist for this picker, so any tag in the tree can go on the task.
+  const shortlist = tasksOnly && !more
+  const { recent, groups } = useMemo(() => orderForPicker(areas, open ? getRecentTags() : [], { tasksOnly: shortlist, keepId: value }), [areas, open, shortlist, value])
 
   const pick = (a: Area | null) => {
     if (a) rememberTag(a.id)
@@ -31,7 +34,7 @@ export function TagPicker({ value, onChange, allowNone = false, tasksOnly = fals
     setOpen(false)
   }
 
-  const selectable = (a: Area) => !tasksOnly || a.show_for_tasks || a.id === value
+  const selectable = (a: Area) => !shortlist || a.show_for_tasks || a.id === value
   const option = (a: Area, indent = false, suffix = '') => (
     <li key={`${indent ? 's' : 'p'}-${a.id}-${suffix}`} role="none">
       <button type="button" role="option" aria-selected={a.id === value} onClick={() => pick(a)} className={`flex min-h-11 w-full items-center gap-2 px-3 text-left text-base hover:bg-slate-100 dark:hover:bg-slate-800 ${indent ? 'pl-8' : 'font-medium'} ${a.id === value ? 'bg-indigo-50 dark:bg-indigo-950' : ''}`}>
@@ -43,7 +46,7 @@ export function TagPicker({ value, onChange, allowNone = false, tasksOnly = fals
 
   return (
     <div className="relative">
-      <button type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((o) => !o)}
+      <button type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} onClick={() => { setOpen((o) => !o); setMore(false) }}
         className={`${input} flex items-center justify-between gap-2 text-left`}>
         {current ? (
           <span className="flex min-w-0 items-center gap-2">
@@ -75,6 +78,11 @@ export function TagPicker({ value, onChange, allowNone = false, tasksOnly = fals
               {g.children.map((c) => option(c, true))}
             </ul>
           ))}
+          {shortlist && (
+            <li role="none" className="border-t border-slate-100 dark:border-slate-800">
+              <button type="button" onClick={() => setMore(true)} className="flex min-h-11 w-full items-center px-3 text-left text-indigo-600 hover:bg-slate-100 dark:text-indigo-400 dark:hover:bg-slate-800">More tags…</button>
+            </li>
+          )}
         </ul>
       )}
     </div>

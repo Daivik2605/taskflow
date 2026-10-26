@@ -41,6 +41,9 @@ export function totalsByDay(events: CounterEvent[]): Map<Day, number> {
 export const todaysEvents = (events: CounterEvent[], counterId: string, today: Day) =>
   forCounter(events, counterId).filter((e) => e.day === today).sort((a, b) => b.at.localeCompare(a.at))
 
+/** Today's total for one counter (never below zero). */
+export const countToday = (events: CounterEvent[], counterId: string, today: Day) => todaysEvents(events, counterId, today).reduce((n, e) => n + e.qty, 0)
+
 export function lastEvent(events: CounterEvent[], counterId: string): CounterEvent | null {
   return forCounter(events, counterId).reduce<CounterEvent | null>((best, e) => (!best || e.at > best.at ? e : best), null)
 }

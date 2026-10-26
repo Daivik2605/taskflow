@@ -126,3 +126,19 @@ export function getRecentTags(): string[] {
 export function rememberTag(id: string): void {
   try { localStorage.setItem(KEY, JSON.stringify(pushRecent(getRecentTags(), id))) } catch { /* private mode */ }
 }
+
+const KIND_PURPOSE: Record<string, string> = {
+  work: 'Paid work and commute; time here feeds your shifts and pay.',
+  hustle: 'Side projects; counts as productive time.',
+  study: 'Learning; counts as productive time.',
+  wellness: 'Health and body: Kriya, workouts, Gym.',
+  break: 'Rest and downtime; not productive time.',
+  sleep: 'Sleep, logged from the check-in.',
+  personal: 'Everything else in life.',
+}
+
+/** One line for Settings → Tags: what this tag is used for. */
+export function tagPurpose(tag: Pick<Area, 'kind' | 'app_key'>): string {
+  const base = KIND_PURPOSE[tag.kind] ?? 'Time and tasks you put under this tag.'
+  return tag.app_key ? `${base} Time from ${tag.app_key} lands here.` : base
+}

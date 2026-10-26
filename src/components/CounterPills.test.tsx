@@ -182,3 +182,43 @@ describe('counter pills', () => {
   })
 })
 
+
+describe('counters can be taken back down (phase 3.7)', () => {
+  const sheetOf = () => { fireEvent.click(screen.getByRole('button', { name: /More for Cigarette/ })); return within(screen.getByRole('dialog', { name: 'Cigarette taps' })) }
+
+  it('the sheet shows today\'s count with a large - and +', () => {
+    renderApp(<CounterPills />, { events })
+    const sheet = sheetOf()
+    expect(sheet.getByLabelText('2 today')).toHaveTextContent('2')
+    fireEvent.click(sheet.getByRole('button', { name: 'Add one to Cigarette' }))
+    expect(screen.getAllByRole('button', { name: 'Add one to Cigarette' }).length).toBe(1)
+  })
+  it('- removes the most recent tap of today, and Undo puts the same tap back', () => {
+    const { countersApi } = renderApp(<CounterPills />, { events })
+    const sheet = sheetOf()
+    fireEvent.click(sheet.getByRole('button', { name: 'Take one off Cigarette' }))
+    expect(countersApi.removeEvent).toHaveBeenCalledWith('e1') // 14:00Z is later than 12:50Z
+    fireEvent.click(sheet.getByRole('button', { name: 'Undo' }))
+    expect(countersApi.tap).toHaveBeenCalledWith('c-cig', { id: 'e1', at: new Date('2026-11-10T14:00:00Z'), qty: 1, note: null, reason: null })
+  })
+  it('- is disabled at zero, so the count never goes below zero', () => {
+    renderApp(<CounterPills />, { events })
+    fireEvent.click(screen.getByRole('button', { name: /More for Weed/ }))
+    const sheet = within(screen.getByRole('dialog', { name: 'Weed taps' }))
+    expect(sheet.getByRole('button', { name: 'Take one off Weed' })).toBeDisabled()
+  })
+  it("lists today's taps each with Remove", () => {
+    const { countersApi } = renderApp(<CounterPills />, { events })
+    const sheet = sheetOf()
+    fireEvent.click(sheet.getByRole('button', { name: 'Delete tap at 9:00 am' }))
+    expect(sheet.getAllByRole('button', { name: /^Delete tap/ })[0]).toHaveTextContent('Remove')
+    expect(countersApi.removeEvent).toHaveBeenCalledWith('e1')
+  })
+  it('the pill has a small - only when the count is above zero, and it takes one off with an Undo toast', () => {
+    const { countersApi } = renderApp(<CounterPills />, { events })
+    expect(screen.queryByRole('button', { name: 'Take one off Weed' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Take one off Cigarette' }))
+    expect(countersApi.removeEvent).toHaveBeenCalledWith('e1')
+    expect(screen.getByRole('status')).toHaveTextContent('Cig -1')
+  })
+})

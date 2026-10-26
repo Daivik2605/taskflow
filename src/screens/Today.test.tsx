@@ -69,7 +69,7 @@ describe('Today', () => {
     renderApp(<Today />, { api })
     expect(screen.getByRole('button', { name: 'Tag' })).toHaveTextContent('No tag')
     await userEvent.type(screen.getByLabelText('Task title'), 'Pass G2{Enter}')
-    expect(api.add).toHaveBeenCalledWith({ title: 'Pass G2', due_on: '2026-11-10', area_id: null })
+    expect(api.add).toHaveBeenCalledWith({ title: 'Pass G2', due_on: '2026-11-10', area_id: null, hard_deadline: false })
   })
   it('quick add offers only the task tags (plus No tag)', async () => {
     renderApp(<Today />, { tasks: [] })
@@ -86,7 +86,7 @@ describe('Today', () => {
     expect(screen.queryByRole('group', { name: 'Counters' })).toBeNull()
   })
   it('shows the activity buttons under the overview and above quick add', () => {
-    renderApp(<Today />, { tasks: [], activities: [{ id: 'g', name: 'Gym', area_id: 'a-work', default_minutes: 60, weekly_target: 3, sort: 0, archived: false }] })
+    renderApp(<Today />, { tasks: [], activities: [{ id: 'g', name: 'Gym', area_id: 'a-work', default_minutes: 60, weekly_target: 3, allow_multiple: false, sort: 0, archived: false }] })
     const overview = screen.getByRole('region', { name: 'Overview' })
     const acts = screen.getByRole('group', { name: 'Activities' })
     const form = screen.getByRole('form', { name: 'Quick add task' })

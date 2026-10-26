@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useConnection } from '../app/connection'
+import { useToast } from '../app/toast'
 import { useToday } from '../app/useToday'
 import { QuickAdd } from '../components/QuickAdd'
 import { TaskList, TaskRow } from '../components/TaskRow'
@@ -9,7 +10,7 @@ import { useAreas } from '../data/areas'
 import { useProjects } from '../data/projects'
 import { useTasks } from '../data/tasks'
 import { buildTree, tagIdsFor, tagLabel } from '../lib/tags'
-import { filterTasks, groupForView, reorderWithin, VIEWS, type TaskFilter, type ViewKey } from '../lib/tasks'
+import { filterTasks, groupForView, inView, quickAddDefaults, reorderWithin, viewShowing, VIEWS, type Task, type TaskFilter, type ViewKey } from '../lib/tasks'
 
 const isView = (v: string | null): v is ViewKey => VIEWS.some((x) => x.key === v)
 
@@ -27,6 +28,7 @@ export function Tasks() {
   const { areas } = useAreas()
   const projects = useProjects()
   const { writesDisabled } = useConnection()
+  const toast = useToast()
   const [params, setParams] = useSearchParams()
 
   const view: ViewKey = isView(params.get('view')) ? (params.get('view') as ViewKey) : 'today'
@@ -51,11 +53,21 @@ export function Tasks() {
   const labels = useMemo(() => [...new Set(tasks.flatMap((t) => t.tags))].sort(), [tasks])
   const tree = useMemo(() => buildTree(areas), [areas])
   const filtered = tag || project || owner || label
+  const defaults = quickAddDefaults(view, today)
+
+  // After an add: if the new task isn't in the current view (or is hidden by a filter), say where it went and offer to go there.
+  const onAdded = (t: Task) => {
+    if (inView(t, view, today) && filterTasks([t], filter).length > 0) return
+    const target = viewShowing(t, today)
+    if (!target) return
+    const name = VIEWS.find((v) => v.key === target)!.label
+    toast.show(`Added to ${name}`, () => { const n = new URLSearchParams(); if (target !== 'today') n.set('view', target); setParams(n, { replace: true }) }, { actionLabel: `Show ${name}`, timeoutMs: 8000 })
+  }
 
   return (
     <section className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl font-semibold">Tasks</h1>
-      <QuickAdd />
+      <QuickAdd key={view} defaultDue={defaults.day} deadline={defaults.deadline} onAdded={onAdded} />
 
       <div role="tablist" aria-label="Views" className="-mx-1 flex gap-1 overflow-x-auto px-1">
         {VIEWS.map((v) => (

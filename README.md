@@ -97,3 +97,15 @@ select column_name from information_schema.columns where table_name = 'taskflow_
 ## Phase 3: deployed + installable (PWA)
 Production: `https://taskflow.jarvisjr.daivik.dev` (Vercel project `taskflow`; DNS at Hostinger). The click-by-click steps, the DNS record, the Supabase settings (redirect URL, sign-ups off), installing on iPhone and Mac, and the check list are in **`docs/DEPLOY.md`**. Env vars on Vercel: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (anon key only; redeploy after changing). No SQL to run in this phase.
 
+
+## Phase 3.7: run the SQL (activity setting, hide unfinished screens)
+Two new columns; until you run this the app shows "The database is out of date".
+
+1. Supabase → SQL Editor → New query → paste the **whole** of `supabase/taskflow_schema.sql` → Run (adds only, safe to re-run).
+2. It adds `taskflow_presets.allow_multiple` (default false) and `taskflow_settings.hide_unfinished_screens` (default true).
+
+**What to check afterwards** (read-only):
+```sql
+select name, allow_multiple from taskflow_presets order by sort;      -- all false
+select hide_unfinished_screens from taskflow_settings;               -- true
+```

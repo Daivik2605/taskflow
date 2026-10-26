@@ -4,7 +4,7 @@ import { useToday } from '../app/useToday'
 import { useActivities } from '../data/activities'
 import { useAreas } from '../data/areas'
 import { useSettings } from '../data/settings'
-import { logMinutes, validateLog, weekLogs, type Activity } from '../lib/activities'
+import { logDay, logMinutes, todayLogs, validateLog, weekLogs, type Activity } from '../lib/activities'
 import { tagPath } from '../lib/tags'
 import { formatDay, formatTime, dayOf, instantToTorontoLocal, parseDuration, torontoLocalToInstant } from '../lib/time'
 import { btn, btnDanger, btnPrimary, input, label } from './ui'
@@ -38,6 +38,7 @@ function SheetBody({ activity, onClose }: { activity: Activity; onClose: () => v
   const [error, setError] = useState<string | null>(null)
 
   const week = weekLogs(logs, activity.id, today, weekStartsOn)
+  const todays = todayLogs(logs, activity.id, today)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -46,6 +47,10 @@ function SheetBody({ activity, onClose }: { activity: Activity; onClose: () => v
     try { endedAt = torontoLocalToInstant(ended) } catch { setError('Pick a date and time.'); return }
     const problem = validateLog(m ?? 0, endedAt, new Date())
     if (problem) { setError(problem); return }
+    if (!activity.allow_multiple && logs.some((l) => l.preset_id === activity.id && logDay(l) === dayOf(endedAt))) {
+      setError('Already logged that day. Turn on "Can be done more than once a day" in Settings → Activities to add another.')
+      return
+    }
     setError(null)
     if (await log(activity.id, { minutes: m!, endedAt })) { setEnded(instantToTorontoLocal(new Date())); setMinutes(String(activity.default_minutes)) }
   }
@@ -71,8 +76,25 @@ function SheetBody({ activity, onClose }: { activity: Activity; onClose: () => v
           </label>
         </div>
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-        <button className={`${btnPrimary} w-full`} disabled={writesDisabled}>Log it</button>
+        <button className={`${btnPrimary} w-full`} disabled={writesDisabled}>{activity.allow_multiple && todays.length > 0 ? 'Add another' : 'Log it'}</button>
       </form>
+
+      {activity.allow_multiple && (
+        <div>
+          <h3 className="mb-1 text-sm font-semibold text-slate-500">Today · {todays.length}</h3>
+          {todays.length === 0 ? <p className="text-sm text-slate-500">None yet today.</p> : (
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {todays.map((l) => (
+                <li key={l.id} className="flex items-center gap-2 py-1">
+                  <span className="flex-1 text-sm">ended {formatTime(l.ended_at)} · {logMinutes(l)} min</span>
+                  <button type="button" className={`${btnDanger} min-h-9 px-3`} disabled={writesDisabled} onClick={() => void removeLog(l.id)}
+                    aria-label={`Remove today's log ended ${formatTime(l.ended_at)}`}>Remove</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div>
         <h3 className="mb-1 text-sm font-semibold text-slate-500">This week · {week.length}</h3>

@@ -10,7 +10,7 @@ export function Work() {
       .then(({ data }) => setJob(data as PayConfig | null))
   }, [])
   return (
-    <Placeholder title="Work" phase={6}>
+    <Placeholder title="Work" phase={6} blurb="Shifts, pay rules, pay periods and paystub checks.">
       {job !== undefined && !payIsConfigured(job) && (
         <p className="mt-4 rounded-lg bg-slate-100 p-3 text-sm dark:bg-slate-800">{PAY_NOT_SET_MESSAGE}</p>
       )}

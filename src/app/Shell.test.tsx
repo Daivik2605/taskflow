@@ -23,8 +23,13 @@ describe('Shell', () => {
     const nav = screen.getByRole('navigation', { name: 'Main' })
     expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['Today', 'Tasks', 'Timer', 'Insights', 'More'])
   })
-  it('More lists Calendar, Inbox, Projects, Work, Settings', () => {
+  it('More hides the unfinished screens by default (Hide unfinished screens is on)', () => {
     renderAt('/more')
+    const main = screen.getByRole('main')
+    expect(within(main).getAllByRole('link').map((l) => l.textContent)).toEqual(['Settings'])
+  })
+  it('More lists Calendar, Inbox, Projects, Work, Settings once the setting is off', () => {
+    renderApp(<Routes><Route element={<Shell />}><Route path="more" element={<More />} /></Route></Routes>, { route: '/more', hideUnfinished: false })
     const main = screen.getByRole('main')
     expect(within(main).getAllByRole('link').map((l) => l.textContent)).toEqual(['Calendar', 'Inbox', 'Projects', 'Work', 'Settings'])
   })

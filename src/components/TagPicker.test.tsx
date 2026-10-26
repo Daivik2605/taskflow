@@ -95,3 +95,31 @@ describe('tag picker, task shortlist', () => {
     expect(list.getByRole('option', { name: /Personal/ })).toHaveAttribute('aria-selected', 'true')
   })
 })
+
+describe('tag picker "More tags…" (phase 3.7)', () => {
+  const optionNames = () => screen.getAllByRole('option').map((o) => o.textContent?.replace(/\s+/g, ' ').trim())
+  function Tasks3() {
+    const [v, setV] = useState<string | null>(null)
+    return <TagPicker value={v} onChange={setV} allowNone tasksOnly />
+  }
+  it('the task picker starts with the shortlist and ends with More tags…', async () => {
+    renderApp(<Tasks3 />)
+    await open()
+    expect(optionNames()).toEqual(['No tag', 'Studygeneral', 'DSA'])
+    expect(screen.getByRole('button', { name: 'More tags…' })).toBeInTheDocument()
+  })
+  it('More tags… reveals the whole tree, and an unflagged tag can be picked', async () => {
+    renderApp(<Tasks3 />)
+    await open()
+    await userEvent.click(screen.getByRole('button', { name: 'More tags…' }))
+    expect(optionNames()).toEqual(expect.arrayContaining(['SQL', 'Work', 'Personal']))
+    expect(screen.queryByRole('button', { name: 'More tags…' })).toBeNull()
+    await userEvent.click(screen.getByRole('option', { name: 'SQL' }))
+    expect(screen.getByRole('button', { name: 'Tag' })).toHaveTextContent('SQLin Study')
+  })
+  it('the full-tree pickers (no tasksOnly) have no More tags… row', async () => {
+    renderApp(<Harness />)
+    await open()
+    expect(screen.queryByRole('button', { name: 'More tags…' })).toBeNull()
+  })
+})

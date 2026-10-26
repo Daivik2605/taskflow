@@ -6,7 +6,7 @@ import { useToday } from '../app/useToday'
 import { useCounters } from '../data/counters'
 import { useGoalInputs } from '../data/goalInputs'
 import { useGoals } from '../data/goals'
-import { activeCounters, counterLabel, forCounter, totalBetween, type Counter } from '../lib/counters'
+import { activeCounters, counterLabel, forCounter, todaysEvents, totalBetween, type Counter } from '../lib/counters'
 import { counterLimit, type CounterLimit } from '../lib/goals'
 import { CounterSheet } from './CounterSheet'
 
@@ -70,6 +70,13 @@ function Pills({ list }: { list: Counter[] }) {
       ),
     })
   }
+  /** Takes back today's most recent tap (the count stops at zero); Undo puts the same tap back. */
+  const doMinus = (c: Counter) => {
+    const ev = todaysEvents(events, c.id, today)[0]
+    if (!ev) return
+    void removeEvent(ev.id)
+    toast.show(`${counterLabel(c)} -1`, () => void tap(c.id, { id: ev.id, at: new Date(ev.at), qty: ev.qty, note: ev.note, reason: ev.reason }), { actionLabel: 'Undo', timeoutMs: 5000 })
+  }
   const startHold = (c: Counter) => {
     hold.current.fired = false
     hold.current.timer = setTimeout(() => { hold.current.fired = true; setSheetFor(c.id) }, HOLD_MS)
@@ -101,6 +108,10 @@ function Pills({ list }: { list: Counter[] }) {
                 <span>{counterLabel(c)}</span>
                 <span className="text-base font-bold tabular-nums">{limit.state === 'none' ? count : limitText(limit)}</span>
               </button>
+              {count > 0 && (
+                <button type="button" disabled={writesDisabled} aria-label={`Take one off ${c.name}`} onClick={() => doMinus(c)}
+                  className="hidden min-h-10 w-8 items-center justify-center border-l border-slate-200 text-base font-bold text-slate-600 disabled:opacity-50 sm:flex dark:border-slate-700 dark:text-slate-300"><span aria-hidden="true">−</span></button>
+              )}
               <button type="button" aria-label={`More for ${c.name}: add at another time, edit today's taps`} onClick={() => setSheetFor(c.id)}
                 className="flex min-h-10 w-8 items-center justify-center border-l border-slate-200 text-xs text-slate-500 dark:border-slate-700"><span aria-hidden="true">▾</span></button>
             </div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { done, task } from './fixtures'
 import {
-  applyChange, applyStatus, buildNewTask, childrenOf, completedDay, completedOn, counts, filterTasks, groupForView, inView, isActive, isDeadlineMissed, isDoneLate,
+  applyChange, applyStatus, buildNewTask, quickAddDefaults, viewShowing, childrenOf, completedDay, completedOn, counts, filterTasks, groupForView, inView, isActive, isDeadlineMissed, isDoneLate,
   isMissed, isTaskMissed, isUpcoming, nextSort, parseTags, rangeStats, reorderWithin, subtaskProgress, taskChips, todaySections, validateWhen, whenOf, whenPatch,
   windowFor, windowPreset, type Task,
 } from './tasks'
@@ -436,4 +436,29 @@ describe('applyChange (realtime merge)', () => {
     expect(applyChange([newer], { type: 'UPDATE', row: { ...a, title: 'old', updated_at: '2026-10-24T09:00:00Z' } })[0].title).toBe('new')
   })
   it('an update for an unknown task adds it (missed insert)', () => { expect(applyChange([a], { type: 'UPDATE', row: b })).toHaveLength(2) })
+})
+
+describe('quick add by view (phase 3.7)', () => {
+  it('defaults: today, tomorrow, a deadline day, none', () => {
+    expect(quickAddDefaults('today', '2026-11-10')).toEqual({ day: '2026-11-10', deadline: false })
+    expect(quickAddDefaults('upcoming', '2026-11-10')).toEqual({ day: '2026-11-11', deadline: false })
+    expect(quickAddDefaults('deadlines', '2026-11-10')).toEqual({ day: '', deadline: true })
+    expect(quickAddDefaults('anytime', '2026-11-10')).toEqual({ day: '', deadline: false })
+    expect(quickAddDefaults('done', '2026-11-10')).toEqual({ day: '', deadline: false })
+  })
+  it('a hard deadline has no start day', () => {
+    const t = buildNewTask({ title: 'Pass G2', due_on: '2026-12-01', hard_deadline: true }, 10, new Date(), 'x')!
+    expect(t).toMatchObject({ start_on: null, due_on: '2026-12-01', hard_deadline: true })
+  })
+  it('hard_deadline without a day is a plain undated task', () => {
+    expect(buildNewTask({ title: 'x', hard_deadline: true }, 10, new Date(), 'x')).toMatchObject({ due_on: null, hard_deadline: false })
+  })
+  it('viewShowing finds the first view that lists the task', () => {
+    const today = '2026-11-10'
+    expect(viewShowing(task({ start_on: today, due_on: today }), today)).toBe('today')
+    expect(viewShowing(task({ start_on: '2026-11-12', due_on: '2026-11-12' }), today)).toBe('upcoming')
+    expect(viewShowing(task({ due_on: '2026-12-25', hard_deadline: true }), today)).toBe('deadlines')
+    expect(viewShowing(task({}), today)).toBe('anytime')
+    expect(viewShowing(done('2026-11-10', '2026-11-10T14:00:00Z', {}), today)).toBe('done')
+  })
 })

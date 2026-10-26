@@ -8,7 +8,7 @@ import {
 import { db, errorMessage, friendlyDbError } from './db'
 
 export interface NewActivity { name: string; area_id: string; default_minutes: number; weekly_target: number | null }
-export type ActivityPatch = Partial<Pick<Activity, 'name' | 'area_id' | 'default_minutes' | 'weekly_target' | 'archived'>>
+export type ActivityPatch = Partial<Pick<Activity, 'name' | 'area_id' | 'default_minutes' | 'weekly_target' | 'allow_multiple' | 'archived'>>
 
 export interface ActivitiesApi {
   activities: Activity[] // every activity, archived included
@@ -30,7 +30,7 @@ const empty: ActivitiesApi = {
 export const ActivitiesContext = createContext<ActivitiesApi>(empty)
 export const useActivities = () => useContext(ActivitiesContext)
 
-const ACTIVITY_COLUMNS = 'id,name,area_id,default_minutes,weekly_target,sort,archived'
+const ACTIVITY_COLUMNS = 'id,name,area_id,default_minutes,weekly_target,allow_multiple,sort,archived'
 const LOG_COLUMNS = 'id,area_id,preset_id,started_at,ended_at'
 const PAGE = 1000
 const nameTaken = (e: { code?: string; message: string }) => (e.code === '23505' ? 'An activity with that name already exists.' : friendlyDbError(e))

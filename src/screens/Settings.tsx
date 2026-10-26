@@ -15,7 +15,7 @@ const THEMES: { value: Theme; label: string }[] = [
 export function Settings() {
   const { session, signOut } = useAuth()
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
-  const { weekStartsOn, setWeekStartsOn } = useSettings()
+  const { weekStartsOn, setWeekStartsOn, hideUnfinished, setHideUnfinished } = useSettings()
   const pick = (t: Theme) => { setTheme(t); applyTheme(t) }
 
   return (
@@ -48,6 +48,14 @@ export function Settings() {
           </select>
         </label>
         <p className="mt-1 text-xs text-slate-500">Used by “This week” windows, the week counters and Insights.</p>
+      </div>
+
+      <div>
+        <h2 className={sectionTitle}>Screens</h2>
+        <label className="flex min-h-11 items-center gap-3 text-sm font-medium">
+          <input type="checkbox" className="h-5 w-5" checked={hideUnfinished} onChange={(e) => void setHideUnfinished(e.target.checked)} />
+          <span>Hide unfinished screens <span className="font-normal text-slate-500">(Calendar, Inbox, Projects and Work stay out of the phone's More list until they are built)</span></span>
+        </label>
       </div>
 
       <GoalsSettings />

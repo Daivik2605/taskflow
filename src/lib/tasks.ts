@@ -356,7 +356,8 @@ export function parseTags(text: string): string[] {
 
 export interface NewTaskInput {
   title: string
-  due_on?: Day | null // quick add: a date means "on that day" (start = due)
+  due_on?: Day | null // quick add: a date means "on that day" (start = due), or the deadline day when hard_deadline
+  hard_deadline?: boolean // quick add on the Deadlines view: due_on is a hard deadline, no start day
   area_id?: string | null
   project_id?: string | null
   parent_id?: string | null
@@ -372,10 +373,25 @@ export function buildNewTask(input: NewTaskInput, sort: number, now: Date, id: s
   return {
     id, title, description: null,
     area_id: input.area_id ?? null, project_id: input.project_id ?? null, parent_id: input.parent_id ?? null,
-    start_on: due, due_on: due, hard_deadline: false, estimate_minutes: null,
+    start_on: input.hard_deadline && due ? null : due, due_on: due, hard_deadline: !!input.hard_deadline && !!due, estimate_minutes: null,
     priority: 2, status: 'todo', owner: 'me', waiting_on: null, tags: [],
     completed_at: null, sort, from_note_id: null, created_at: iso, updated_at: iso,
   }
+}
+
+/** What quick add pre-fills on each Tasks view: Today = today, Upcoming = tomorrow, Deadlines = a deadline day (asked for), Anytime and Done = no day. */
+export function quickAddDefaults(view: ViewKey, today: Day): { day: Day | ''; deadline: boolean } {
+  switch (view) {
+    case 'today': return { day: today, deadline: false }
+    case 'upcoming': return { day: addDays(today, 1), deadline: false }
+    case 'deadlines': return { day: '', deadline: true }
+    default: return { day: '', deadline: false }
+  }
+}
+
+/** The first Tasks view that lists this task (Today, Upcoming, Deadlines, Anytime, Done), or null if none does. */
+export function viewShowing(t: Task, today: Day): ViewKey | null {
+  return VIEWS.find((v) => inView(t, v.key, today))?.key ?? null
 }
 
 // ───────────── Realtime merge ─────────────

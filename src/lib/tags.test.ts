@@ -138,3 +138,11 @@ describe('task tag shortlist (SPEC §2b revision 4)', () => {
     expect(orderForPicker(list, []).groups[0].children.map((c) => c.name)).toEqual(['DSA', 'Trading'])
   })
 })
+
+describe('tagPurpose (phase 3.7)', () => {
+  it('gives one line per kind, and names the app that feeds a linked tag', async () => {
+    const { tagPurpose } = await import('./tags')
+    expect(tagPurpose({ kind: 'sleep', app_key: null })).toBe('Sleep, logged from the check-in.')
+    expect(tagPurpose({ kind: 'study', app_key: 'dsa' })).toBe('Learning; counts as productive time. Time from dsa lands here.')
+  })
+})
