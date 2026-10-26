@@ -16,7 +16,7 @@ const THEMES: { value: Theme; label: string }[] = [
 export function Settings() {
   const { session, signOut } = useAuth()
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
-  const { weekStartsOn, setWeekStartsOn, hideUnfinished, setHideUnfinished, stillGoingHours, setStillGoingHours } = useSettings()
+  const { weekStartsOn, setWeekStartsOn, hideUnfinished, setHideUnfinished, stillGoingHours, setStillGoingHours, shutdownTime, setShutdownTime } = useSettings()
   const pick = (t: Theme) => { setTheme(t); applyTheme(t) }
 
   return (
@@ -66,6 +66,15 @@ export function Settings() {
             onBlur={(e) => { const n = Number(e.target.value); if (n !== stillGoingHours) void setStillGoingHours(n) }} />
         </label>
         <p className="mt-1 text-xs text-slate-500">A running timer asks whether it is still going, or when it ended, after this long. Presets are the Activities below: one tap logs a finished session.</p>
+      </div>
+
+      <div>
+        <h2 className={sectionTitle}>Evening shutdown</h2>
+        <label className="block text-sm font-medium">Show the shutdown card from (Toronto time)
+          <input className={`${input} mt-1 w-32`} type="time" defaultValue={shutdownTime} key={shutdownTime}
+            onBlur={(e) => { if (e.target.value && e.target.value !== shutdownTime) void setShutdownTime(e.target.value) }} />
+        </label>
+        <p className="mt-1 text-xs text-slate-500">The card on Today appears from this time until you shut the day down. “Shut down the day” under the date is always there.</p>
       </div>
 
       <GoalsSettings />

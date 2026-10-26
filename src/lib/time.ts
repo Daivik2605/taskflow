@@ -53,6 +53,12 @@ export function hourOf(instant: Instant): number {
   return torontoParts(toDate(instant)).hour
 }
 
+/** Minutes since Toronto midnight (0–1439) of a moment, by the wall clock: on a DST day it skips or repeats the shifted hour like the clock does. */
+export function minuteOfDay(instant: Instant): number {
+  const p = torontoParts(toDate(instant))
+  return p.hour * 60 + p.minute
+}
+
 /** Today's Toronto date. `now` is injectable for tests. */
 export function todayToronto(now: Instant = new Date()): Day {
   return dayOf(now)

@@ -1045,3 +1045,65 @@ end $$;
 -- (only the Edge Function writes log rows), so the rate limit can't be faked from the app.
 grant select, insert, update, delete on public.taskflow_api_tokens to authenticated;
 grant select, delete on public.taskflow_api_log to authenticated;
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════════
+-- Phase 4.2: plan the day, shut down the day, weekly review (SPEC §18).
+-- One row per Toronto day (taskflow_days) and per week (taskflow_weeks). Idempotent: safe to re-run. Nothing is dropped.
+-- Dropping a task in the shutdown uses the existing status 'dropped' (no hard delete, restorable); no new task column.
+-- ═════════════════════════════════════════════════════════════════════════════════════════════
+create table if not exists public.taskflow_days (
+  id                 uuid primary key default gen_random_uuid(),
+  user_id            uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  day                date not null,                                   -- Toronto calendar day
+  top3               uuid[] not null default '{}' check (cardinality(top3) <= 3),
+  plan_note          text,
+  plan_energy        int check (plan_energy between 1 and 5),         -- the morning's energy
+  planned_at         timestamptz,
+  plan_dismissed_at  timestamptz,
+  mood               int check (mood between 1 and 5),                -- the evening shutdown
+  energy             int check (energy between 1 and 5),
+  review_note        text,
+  reviewed_at        timestamptz,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now(),
+  unique (user_id, day)
+);
+
+create table if not exists public.taskflow_weeks (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  week_start   date not null,                                         -- first day of the week (per week_starts_on)
+  note         text,
+  reviewed_at  timestamptz,
+  ai_summary   text,                                                  -- phase 12.5
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  unique (user_id, week_start)
+);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['taskflow_days','taskflow_weeks'] loop
+    execute format('drop trigger if exists taskflow_set_updated_at on public.%I', t);
+    execute format('create trigger taskflow_set_updated_at before update on public.%I for each row execute function public.taskflow_set_updated_at()', t);
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "own rows" on public.%I', t);
+    execute format('create policy "own rows" on public.%I for all to authenticated
+                    using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()))', t);
+    execute format('grant select, insert, update, delete on public.%I to authenticated', t);
+    if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+       and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+
+-- When the evening shutdown card appears (Toronto time, HH:MM).
+alter table public.taskflow_settings add column if not exists shutdown_time text not null default '21:00';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'taskflow_settings_shutdown_time_format') then
+    alter table public.taskflow_settings add constraint taskflow_settings_shutdown_time_format check (shutdown_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$');
+  end if;
+end $$;

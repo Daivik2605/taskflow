@@ -2,7 +2,7 @@
 do $$ declare n int; begin
   select count(*) into n from pg_class c join pg_namespace s on s.oid = c.relnamespace
    where s.nspname = 'public' and c.relkind = 'r' and c.relname like 'taskflow\_%';
-  if n <> 22 then raise exception 'expected 22 taskflow tables, found %', n; end if;
+  if n <> 24 then raise exception 'expected 24 taskflow tables, found %', n; end if;
   select count(*) into n from pg_class c join pg_namespace s on s.oid = c.relnamespace
    where s.nspname = 'public' and c.relkind in ('r','v') and c.relname !~ '^taskflow_';
   if n <> 0 then raise exception 'objects without prefix: %', n; end if;
@@ -25,13 +25,13 @@ do $$ declare n int; begin
   select count(*) into n from storage.buckets where id in ('taskflow-paystubs','taskflow-timecards') and not public;
   if n <> 2 then raise exception 'expected 2 private taskflow buckets, found %', n; end if;
   select count(*) into n from pg_trigger where tgname = 'taskflow_set_updated_at';
-  if n <> 19 then raise exception 'expected 19 updated_at triggers, found %', n; end if;
+  if n <> 21 then raise exception 'expected 21 updated_at triggers, found %', n; end if;
   select count(*) into n from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public'
      and tablename in ('taskflow_tasks','taskflow_sessions','taskflow_session_segments','taskflow_resets',
-                       'taskflow_shifts','taskflow_shift_breaks','taskflow_notes','taskflow_counters','taskflow_counter_events','taskflow_presets','taskflow_goals');
-  if n <> 11 then raise exception 'expected 11 tables in realtime publication, found %', n; end if;
+                       'taskflow_shifts','taskflow_shift_breaks','taskflow_notes','taskflow_counters','taskflow_counter_events','taskflow_presets','taskflow_goals','taskflow_days','taskflow_weeks');
+  if n <> 13 then raise exception 'expected 13 tables in realtime publication, found %', n; end if;
   select count(*) into n from pg_publication_tables where pubname = 'supabase_realtime';
-  if n <> 11 then raise exception 'publication holds % tables, expected 11', n; end if;
+  if n <> 13 then raise exception 'publication holds % tables, expected 13', n; end if;
   select count(*) into n from information_schema.columns where table_name = 'taskflow_jobs'
      and column_name in ('hourly_rate','pay_period_anchor') and is_nullable = 'YES';
   if n <> 2 then raise exception 'hourly_rate and pay_period_anchor must be nullable'; end if;

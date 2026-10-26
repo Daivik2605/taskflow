@@ -1,12 +1,15 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fakeTasksApi, makeDone, makeTask, polyfillDialog, renderApp } from '../test-utils'
+import { dayRow, fakeTasksApi, makeDone, makeTask, polyfillDialog, renderApp } from '../test-utils'
 import { Today } from './Today'
 
 beforeAll(polyfillDialog)
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-10T15:00:00Z')) }) // Tue 10 Nov, Toronto
 afterEach(() => { vi.useRealTimers(); localStorage.clear() })
+
+// The morning plan card has its own tests (PlanShutdown.test.tsx); here the day is already planned so it stays out of the way.
+const renderToday = (o: Parameters<typeof renderApp>[1] = {}) => renderApp(<Today />, { days: [dayRow('2026-11-10', { planned_at: '2026-11-10T12:00:00Z' })], ...o })
 
 const tasks = () => [
   makeTask({ title: 'Pass G2', due_on: '2026-11-09' }), // missed (made before revision 2: no start day)
@@ -25,17 +28,17 @@ const headings = () => screen.getAllByRole('heading', { level: 2 }).map((h) => h
 
 describe('Today', () => {
   it('lists missed, deadlines in the next 14 days, today, in a window, no date, done today', () => {
-    renderApp(<Today />, { tasks: tasks() })
+    renderToday({ tasks: tasks() })
     expect(headings()).toEqual([
       'Goals', 'Missed · 2 reschedule or drop', 'Deadlines in the next 14 days · 1', 'Today · 1', 'In a window · 1', 'No date · 1', 'Done today · 1'])
   })
   it('hides upcoming tasks, far deadlines and sub-tasks', () => {
-    renderApp(<Today />, { tasks: tasks() })
+    renderToday({ tasks: tasks() })
     for (const t of ['Starts later', 'Far deadline', 'A sub-task']) expect(screen.queryByText(t)).toBeNull()
     for (const t of ['Pass G2', 'Renew passport', 'Call Mom', 'Finish week 3', 'Tax return', 'Someday thing', 'Already done']) expect(screen.getByText(t)).toBeInTheDocument()
   })
   it('shows chips: missed, deadline countdown, window days left, today', () => {
-    renderApp(<Today />, { tasks: tasks() })
+    renderToday({ tasks: tasks() })
     const chipOf = (title: string) => within(screen.getByText(title).closest('li')!)
     expect(chipOf('Pass G2').getByText('Missed')).toBeInTheDocument()
     expect(screen.getByText('⚑ Deadline missed')).toBeInTheDocument()
@@ -45,7 +48,7 @@ describe('Today', () => {
   })
   it('ticking a task completes it; un-ticking a finished one re-opens it', async () => {
     const api = fakeTasksApi(tasks())
-    renderApp(<Today />, { api })
+    renderToday({ api })
     await userEvent.click(screen.getByRole('checkbox', { name: 'Mark done: Call Mom' }))
     expect(api.setDone).toHaveBeenCalledWith(expect.any(String), true)
     await userEvent.click(screen.getByRole('checkbox', { name: 'Mark not done: Already done' }))
@@ -53,7 +56,7 @@ describe('Today', () => {
   })
   it('missed tasks can be moved to today, rescheduled or dropped; a missed deadline cannot just be moved', async () => {
     const api = fakeTasksApi(tasks())
-    renderApp(<Today />, { api })
+    renderToday({ api })
     const pass = screen.getByText('Pass G2').closest('li')!
     await userEvent.click(within(pass).getByRole('button', { name: 'Do today' }))
     expect(api.update).toHaveBeenCalledWith(api.tasks.find((t) => t.title === 'Pass G2')!.id, { due_on: '2026-11-10' })
@@ -66,27 +69,27 @@ describe('Today', () => {
   })
   it('quick add on Today defaults to today and no tag', async () => {
     const api = fakeTasksApi([])
-    renderApp(<Today />, { api })
+    renderToday({ api })
     expect(screen.getByRole('button', { name: 'Tag' })).toHaveTextContent('No tag')
     await userEvent.type(screen.getByLabelText('Task title'), 'Pass G2{Enter}')
     expect(api.add).toHaveBeenCalledWith({ title: 'Pass G2', due_on: '2026-11-10', area_id: null, hard_deadline: false })
   })
   it('quick add offers only the task tags (plus No tag)', async () => {
-    renderApp(<Today />, { tasks: [] })
+    renderToday({ tasks: [] })
     await userEvent.click(screen.getByRole('button', { name: 'Tag' }))
     const list = within(screen.getByRole('listbox', { name: 'Tag list' }))
     expect(list.getAllByRole('option').map((o) => o.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['No tag', 'Studygeneral', 'DSA'])
   })
   it('says so when there are no tasks at all', () => {
-    renderApp(<Today />, { tasks: [] })
+    renderToday({ tasks: [] })
     expect(screen.getByText(/No tasks yet/)).toBeInTheDocument()
   })
   it('no longer has big counter buttons (they are header pills now)', () => {
-    renderApp(<Today />, { tasks: [] })
+    renderToday({ tasks: [] })
     expect(screen.queryByRole('group', { name: 'Counters' })).toBeNull()
   })
   it('shows the activity buttons under the overview and above quick add', () => {
-    renderApp(<Today />, { tasks: [], activities: [{ id: 'g', name: 'Gym', area_id: 'a-work', default_minutes: 60, weekly_target: 3, allow_multiple: false, sort: 0, archived: false }] })
+    renderToday({ tasks: [], activities: [{ id: 'g', name: 'Gym', area_id: 'a-work', default_minutes: 60, weekly_target: 3, allow_multiple: false, sort: 0, archived: false }] })
     const overview = screen.getByRole('region', { name: 'Overview' })
     const acts = screen.getByRole('group', { name: 'Activities' })
     const form = screen.getByRole('form', { name: 'Quick add task' })

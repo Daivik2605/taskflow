@@ -5,11 +5,13 @@ import { ActivitiesProvider } from './activities'
 import { OutboxProvider } from './outbox'
 import { AreasProvider } from './areas'
 import { CountersProvider } from './counters'
+import { DaysProvider } from './days'
 import { GoalsProvider } from './goals'
 import { ProjectsProvider } from './projects'
 import { SettingsProvider } from './settings'
 import { TimerProvider } from './timer'
 import { TasksProvider } from './tasks'
+import { WeeksProvider } from './weeks'
 
 /** Everything signed-in screens read from. Mounted inside AuthGate, so the Supabase client exists. */
 export function DataProviders({ children }: { children: ReactNode }) {
@@ -24,7 +26,11 @@ export function DataProviders({ children }: { children: ReactNode }) {
                 <GoalsProvider>
                   <TasksProvider>
                     <TimerProvider>
-                      <TaskSheetProvider>{children}</TaskSheetProvider>
+                      <DaysProvider>
+                        <WeeksProvider>
+                          <TaskSheetProvider>{children}</TaskSheetProvider>
+                        </WeeksProvider>
+                      </DaysProvider>
                     </TimerProvider>
                   </TasksProvider>
                 </GoalsProvider>

@@ -28,9 +28,9 @@ const shown = (...titles: string[]) => titles.forEach((t) => expect(screen.getBy
 const hidden = (...titles: string[]) => titles.forEach((t) => expect(screen.queryByText(t)).toBeNull())
 
 describe('Tasks screen views', () => {
-  it('has the five views, Today first', () => {
+  it('has the six views, Today first', () => {
     renderApp(<Tasks />, { tasks: tasks(), route: '/tasks' })
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Today', 'Upcoming', 'Deadlines', 'Anytime', 'Done'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Today', 'Upcoming', 'Deadlines', 'Anytime', 'Done', 'Dropped'])
     expect(screen.getByRole('tab', { name: 'Today' })).toHaveAttribute('aria-selected', 'true')
   })
   it('Today: missed, deadlines coming up, today, in a window — upcoming and far deadlines stay out', () => {
@@ -54,10 +54,26 @@ describe('Tasks screen views', () => {
     shown('Anytime thing')
     hidden('Missed one', 'Plain sub-task') // a sub-task without its own date lives inside its parent
   })
-  it('Done shows finished and dropped tasks', () => {
+  it('Done shows finished tasks only; dropped ones are hidden from it', () => {
     renderApp(<Tasks />, { tasks: tasks(), route: '/tasks?view=done' })
-    expect(headings()).toEqual(['Today · 1', 'Dropped · 1'])
-    shown('Finished', 'Dropped one')
+    expect(headings()).toEqual(['Today · 1'])
+    shown('Finished')
+    hidden('Dropped one')
+  })
+  it('Dropped lists dropped tasks and Restore brings one back as to do', async () => {
+    const api = fakeTasksApi(tasks())
+    renderApp(<Tasks />, { api, route: '/tasks?view=dropped' })
+    expect(headings()).toEqual(['Dropped · 1'])
+    hidden('Finished', 'Missed one')
+    await userEvent.click(screen.getByRole('button', { name: 'Restore: Dropped one' }))
+    expect(api.update).toHaveBeenCalledWith(expect.any(String), { status: 'todo' })
+  })
+  it('a dropped task shows in no other view', () => {
+    for (const v of ['today', 'upcoming', 'deadlines', 'anytime', 'done']) {
+      const { unmount } = renderApp(<Tasks />, { tasks: tasks(), route: `/tasks?view=${v}` })
+      hidden('Dropped one')
+      unmount()
+    }
   })
   it('switching view updates the address, so a refresh keeps it', async () => {
     renderApp(<Tasks />, { tasks: tasks(), route: '/tasks' })

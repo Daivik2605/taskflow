@@ -244,6 +244,33 @@ do $$ begin
   delete from taskflow_goals where series_id = current_setting('tf.goal_series')::uuid;   -- deleting a goal removes every version
   if (select count(*) from taskflow_goals where series_id = current_setting('tf.goal_series')::uuid) <> 0 then raise exception 'delete left versions'; end if;
 end $$;
+-- ── phase 4.2: days, weeks, shutdown time ──
+select set_config('request.jwt.claim.sub', :'x', false) \g /dev/null
+do $$ declare ids uuid[] := array[gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid()]; begin
+  insert into taskflow_days (day, top3, mood, energy, plan_energy) values ('2026-11-10', ids[1:3], 4, 3, 5);
+  begin insert into taskflow_days (day) values ('2026-11-10'); raise exception 'second row for one day allowed';
+  exception when unique_violation then null; end;
+  begin insert into taskflow_days (day, top3) values ('2026-11-11', ids); raise exception 'four top tasks allowed';
+  exception when check_violation then null; end;
+  begin insert into taskflow_days (day, mood) values ('2026-11-12', 6); raise exception 'mood 6 allowed';
+  exception when check_violation then null; end;
+  insert into taskflow_weeks (week_start, note) values ('2026-11-02', 'ok');
+  begin insert into taskflow_weeks (week_start) values ('2026-11-02'); raise exception 'second review for one week allowed';
+  exception when unique_violation then null; end;
+  insert into taskflow_settings default values on conflict (user_id) do nothing;
+  update taskflow_settings set shutdown_time = '22:30' where true;
+  begin update taskflow_settings set shutdown_time = '25:00' where true; raise exception 'bad shutdown time allowed';
+  exception when check_violation then null; end;
+end $$;
+select set_config('request.jwt.claim.sub', :'y', false) \g /dev/null
+do $$ begin
+  if (select count(*) from taskflow_days) + (select count(*) from taskflow_weeks) <> 0 then raise exception 'user y can see user x''s days or weeks'; end if;
+  delete from taskflow_days; delete from taskflow_weeks;
+end $$;
+select set_config('request.jwt.claim.sub', :'x', false) \g /dev/null
+do $$ begin
+  if (select count(*) from taskflow_days) <> 1 or (select count(*) from taskflow_weeks) <> 1 then raise exception 'user y deleted user x''s days or weeks'; end if;
+end $$;
 reset role;
 
 select 'BEHAVIOURS PASSED' as result;

@@ -9,6 +9,10 @@ import { AreasContext, type AreasApi } from './data/areas'
 import { ActivitiesContext, type ActivitiesApi } from './data/activities'
 import { CountersContext, type CountersApi } from './data/counters'
 import { GoalsContext, type GoalsApi } from './data/goals'
+import { DaysContext, type DaysApi } from './data/days'
+import { WeeksContext, type WeeksApi } from './data/weeks'
+import { emptyDay, type DayRow } from './lib/dayPlan'
+import type { WeekRow } from './lib/weekReview'
 import type { Goal } from './lib/goals'
 import { ProjectsContext } from './data/projects'
 import { SettingsContext, type SettingsApi } from './data/settings'
@@ -88,7 +92,17 @@ export function fakeGoalsApi(goals: Goal[] = [], over: Partial<GoalsApi> = {}): 
   }
 }
 
+export function fakeDaysApi(days: DayRow[] = [], over: Partial<DaysApi> = {}): DaysApi {
+  return { days, loading: false, get: (d) => days.find((x) => x.day === d) ?? null, save: vi.fn(async () => true), ...over }
+}
+export const dayRow = (day: string, over: Partial<DayRow> = {}): DayRow => ({ ...emptyDay(day), ...over })
+
+export function fakeWeeksApi(weeks: WeekRow[] = [], over: Partial<WeeksApi> = {}): WeeksApi {
+  return { weeks, loading: false, get: (w) => weeks.find((x) => x.week_start === w) ?? null, save: vi.fn(async () => true), ...over }
+}
+
 interface Opts {
+  days?: DayRow[]; daysApi?: DaysApi; weeks?: WeekRow[]; weeksApi?: WeeksApi
   goals?: Goal[]; goalsApi?: GoalsApi
   tasks?: Task[]; api?: TasksApi
   areas?: Area[]; areasApi?: AreasApi
@@ -104,11 +118,13 @@ export function renderApp(ui: ReactElement, o: Opts = {}) {
   const goalsApi = o.goalsApi ?? fakeGoalsApi(o.goals ?? [])
   const activitiesApi = o.activitiesApi ?? fakeActivitiesApi(o.activities ?? [], o.logs ?? [])
   const timerApi = o.timerApi ?? fakeTimerApi(o.sessions ?? [])
+  const daysApi = o.daysApi ?? fakeDaysApi(o.days ?? [])
+  const weeksApi = o.weeksApi ?? fakeWeeksApi(o.weeks ?? [])
   const utils = render(
     <ConnectionProvider>
       <MemoryRouter initialEntries={[o.route ?? '/']}>
         <ToastProvider>
-          <SettingsContext.Provider value={{ weekStartsOn: o.weekStartsOn ?? 1, setWeekStartsOn: vi.fn(async () => {}), hideUnfinished: o.hideUnfinished ?? true, setHideUnfinished: vi.fn(async () => {}), stillGoingHours: 4, setStillGoingHours: vi.fn(async () => {}), ...o.settingsApi }}>
+          <SettingsContext.Provider value={{ weekStartsOn: o.weekStartsOn ?? 1, setWeekStartsOn: vi.fn(async () => {}), hideUnfinished: o.hideUnfinished ?? true, setHideUnfinished: vi.fn(async () => {}), stillGoingHours: 4, setStillGoingHours: vi.fn(async () => {}), shutdownTime: '21:00', setShutdownTime: vi.fn(async () => {}), ...o.settingsApi }}>
             <AreasContext.Provider value={areasApi}>
               <ProjectsContext.Provider value={[{ id: 'p-aeo', name: 'AEO Studio', status: 'active' }]}>
                 <CountersContext.Provider value={countersApi}>
@@ -116,7 +132,11 @@ export function renderApp(ui: ReactElement, o: Opts = {}) {
                     <GoalsContext.Provider value={goalsApi}>
                       <TasksContext.Provider value={tasksApi}>
                         <TimerContext.Provider value={timerApi}>
-                          <TaskSheetProvider>{ui}</TaskSheetProvider>
+                          <DaysContext.Provider value={daysApi}>
+                            <WeeksContext.Provider value={weeksApi}>
+                              <TaskSheetProvider>{ui}</TaskSheetProvider>
+                            </WeeksContext.Provider>
+                          </DaysContext.Provider>
                         </TimerContext.Provider>
                       </TasksContext.Provider>
                     </GoalsContext.Provider>
@@ -129,7 +149,7 @@ export function renderApp(ui: ReactElement, o: Opts = {}) {
       </MemoryRouter>
     </ConnectionProvider>,
   )
-  return { ...utils, timerApi, tasksApi, areasApi, countersApi, activitiesApi, goalsApi }
+  return { ...utils, timerApi, tasksApi, areasApi, countersApi, activitiesApi, goalsApi, daysApi, weeksApi }
 }
 
 /** jsdom has no <dialog> behaviour yet. */

@@ -6,6 +6,7 @@ import { DataProviders } from './data/DataProviders'
 import { Capture } from './screens/Capture'
 import { More } from './screens/More'
 import { Settings } from './screens/Settings'
+import { Shutdown } from './screens/Shutdown'
 import { Tasks } from './screens/Tasks'
 import { Today } from './screens/Today'
 import { Work } from './screens/Work'
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="projects" element={<Projects />} />
             <Route path="work" element={<Work />} />
             <Route path="capture" element={<Capture />} />
+            <Route path="shutdown" element={<Shutdown />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

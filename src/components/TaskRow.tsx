@@ -80,6 +80,10 @@ export function TaskRow({ task, today, reorder, triage }: Props) {
           </span>
         </button>
 
+        {task.status === 'dropped' && (
+          <button type="button" className={`${btn} min-h-9 shrink-0 self-center px-3`} aria-label={`Restore: ${task.title}`} onClick={() => void update(task.id, { status: 'todo' })}>Restore</button>
+        )}
+
         {!closed && (
           <button type="button" onClick={() => void play()} disabled={running}
             aria-label={running ? `Timer running on: ${task.title}` : `Start timer: ${task.title}`}

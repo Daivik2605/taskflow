@@ -1,8 +1,11 @@
 import { useMemo, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { ActivityButtons } from '../components/ActivityButtons'
 import { QuickAdd } from '../components/QuickAdd'
 import { TaskList, TaskRow } from '../components/TaskRow'
 import { OverviewStrip } from '../components/OverviewStrip'
+import { PlanCard } from '../components/PlanCard'
+import { ShutdownCard } from '../components/ShutdownCard'
 import { useTasks } from '../data/tasks'
 import { useToday } from '../app/useToday'
 import { todaySections, type Task } from '../lib/tasks'
@@ -31,12 +34,14 @@ export function Today() {
     <section className="mx-auto max-w-5xl space-y-5">
       <header className="mx-auto max-w-2xl">
         <h1 className="text-2xl font-semibold">Today</h1>
-        <p className="text-sm text-slate-500">{formatDay(today)}</p>
+        <p className="text-sm text-slate-500">{formatDay(today)} · <Link to="/shutdown" className="text-indigo-600 dark:text-indigo-400">Shut down the day</Link></p>
       </header>
 
       <OverviewStrip />
 
       <div className="mx-auto max-w-2xl space-y-5">
+        <ShutdownCard />
+        <PlanCard />
         <ActivityButtons />
 
         <QuickAdd defaultDue={today} />

@@ -19,6 +19,7 @@ const EMPTY: Record<ViewKey, string> = {
   deadlines: 'No open deadlines. Set one from a task: When → Deadline.',
   anytime: 'No undated tasks.',
   done: 'Nothing finished yet.',
+  dropped: 'Nothing dropped. Dropped tasks stay here so you can restore them.',
 }
 
 export function Tasks() {

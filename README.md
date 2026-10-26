@@ -122,6 +122,16 @@ select still_going_hours from taskflow_settings;                                
 select indexname from pg_indexes where indexname = 'taskflow_one_active_session';  -- one row
 ```
 
+## Phase 4.2: run the SQL (plan, shutdown, weekly review)
+1. Supabase → SQL Editor → New query → paste the **whole** of `supabase/taskflow_schema.sql` → Run (adds only, safe to re-run).
+2. It adds tables `taskflow_days` and `taskflow_weeks` (with realtime) and `taskflow_settings.shutdown_time` (default `21:00`).
+
+```sql
+select count(*) from taskflow_days;                       -- 0 until you save a plan
+select shutdown_time from taskflow_settings;              -- 21:00
+select tablename from pg_publication_tables where pubname = 'supabase_realtime' and tablename in ('taskflow_days','taskflow_weeks');  -- 2 rows
+```
+
 ## Phase 3.6: Shortcuts, Back Tap and Siri (run the SQL, deploy the function)
 1. SQL Editor: paste the whole of `supabase/taskflow_schema.sql` → Run (adds `taskflow_api_tokens` and `taskflow_api_log`; safe to re-run).
 2. Deploy: `supabase link --project-ref <ref>` then `supabase functions deploy taskflow-api --no-verify-jwt` (full steps, the Shortcuts, Back Tap, Siri and Action button guide: `docs/SHORTCUTS.md`).

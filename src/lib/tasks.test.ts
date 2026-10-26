@@ -310,7 +310,8 @@ describe('views', () => {
     expect(inV('upcoming')).toEqual(['t7'])
     expect(inV('deadlines')).toEqual(['t4', 't5', 't6'])
     expect(inV('anytime')).toEqual(['t8'])
-    expect(inV('done')).toEqual(['t9', 't10'])
+    expect(inV('done')).toEqual(['t9'])
+    expect(inV('dropped')).toEqual(['t10'])
   })
   it('Today groups: missed (oldest first), deadlines, today, in a window', () => {
     expect(names('today')).toEqual([['Missed', ['t6', 't1']], ['Deadlines coming up', ['t4']], ['Today', ['t2']], ['In a window', ['t3']]])
@@ -319,7 +320,8 @@ describe('views', () => {
   it('Deadlines: missed, within 7 days, later', () => { expect(names('deadlines')).toEqual([['Missed', ['t6']], ['Later', ['t4', 't5']]]) })
   it('Anytime and Done', () => {
     expect(names('anytime')).toEqual([['No date', ['t8']]])
-    expect(names('done')).toEqual([['Today', ['t9']], ['Dropped', ['t10']]])
+    expect(names('done')).toEqual([['Today', ['t9']]])
+    expect(names('dropped')).toEqual([['Dropped', ['t10']]])
   })
   it('Done groups by completion day, newest first', () => {
     const old = done(null, '2026-11-09T15:00:00Z', { title: 'older' })

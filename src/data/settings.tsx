@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useConnection } from '../app/connection'
 import { useToast } from '../app/toast'
+import { DEFAULT_SHUTDOWN_TIME, isShutdownTime } from '../lib/dayPlan'
 import { urlToRecord } from '../pwa/publicUrl'
 import { db, friendlyDbError } from './db'
 
@@ -14,9 +15,12 @@ export interface SettingsApi {
   /** "Still going?" asks after this many hours of one running stretch (1 to 24). */
   stillGoingHours: number
   setStillGoingHours: (hours: number) => Promise<void>
+  /** "HH:MM" (Toronto): when the evening shutdown card appears. */
+  shutdownTime: string
+  setShutdownTime: (time: string) => Promise<void>
 }
 
-export const SettingsContext = createContext<SettingsApi>({ weekStartsOn: 1, setWeekStartsOn: async () => {}, hideUnfinished: true, setHideUnfinished: async () => {}, stillGoingHours: 4, setStillGoingHours: async () => {} })
+export const SettingsContext = createContext<SettingsApi>({ weekStartsOn: 1, setWeekStartsOn: async () => {}, hideUnfinished: true, setHideUnfinished: async () => {}, stillGoingHours: 4, setStillGoingHours: async () => {}, shutdownTime: DEFAULT_SHUTDOWN_TIME, setShutdownTime: async () => {} })
 export const useSettings = () => useContext(SettingsContext)
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -25,18 +29,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [weekStartsOn, setWeek] = useState(1)
   const [hideUnfinished, setHide] = useState(true)
   const [stillGoingHours, setStill] = useState(4)
+  const [shutdownTime, setShutdown] = useState(DEFAULT_SHUTDOWN_TIME)
 
   useEffect(() => {
     let cancelled = false
     const load = async () => {
-      const { data, error } = await db().from('taskflow_settings').select('week_starts_on,taskflow_url,hide_unfinished_screens,still_going_hours').maybeSingle()
+      const { data, error } = await db().from('taskflow_settings').select('week_starts_on,taskflow_url,hide_unfinished_screens,still_going_hours,shutdown_time').maybeSingle()
       if (cancelled) return
       if (error) { reportError(friendlyDbError(error)); return }
       if (!data) return
-      const row = data as { week_starts_on: number; taskflow_url: string | null; hide_unfinished_screens: boolean; still_going_hours: number }
+      const row = data as { week_starts_on: number; taskflow_url: string | null; hide_unfinished_screens: boolean; still_going_hours: number; shutdown_time?: string }
       setWeek(row.week_starts_on)
       setHide(row.hide_unfinished_screens)
       setStill(row.still_going_hours)
+      if (row.shutdown_time && isShutdownTime(row.shutdown_time)) setShutdown(row.shutdown_time)
       // Remember the deployed address once, from whichever device opens it first (never localhost, a LAN address or a preview URL).
       const url = urlToRecord(window.location.origin, row.taskflow_url)
       if (url) await db().from('taskflow_settings').update({ taskflow_url: url }).not('id', 'is', null)
@@ -72,6 +78,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (error) { setStill(prev); toast.show(`Saving that setting failed: ${friendlyDbError(error)}`) }
   }, [writesDisabled, stillGoingHours, toast])
 
-  const value = useMemo(() => ({ weekStartsOn, setWeekStartsOn, hideUnfinished, setHideUnfinished, stillGoingHours, setStillGoingHours }), [weekStartsOn, setWeekStartsOn, hideUnfinished, setHideUnfinished, stillGoingHours, setStillGoingHours])
+  const setShutdownTime = useCallback(async (time: string) => {
+    if (writesDisabled) { toast.show("You're offline or Supabase is unreachable — changes are turned off."); return }
+    if (!isShutdownTime(time)) { toast.show('Pick a time like 21:00.'); return }
+    const prev = shutdownTime
+    setShutdown(time)
+    const { error } = await db().from('taskflow_settings').update({ shutdown_time: time }).not('id', 'is', null)
+    if (error) { setShutdown(prev); toast.show(`Saving that setting failed: ${friendlyDbError(error)}`) }
+  }, [writesDisabled, shutdownTime, toast])
+
+  const value = useMemo(() => ({ weekStartsOn, setWeekStartsOn, hideUnfinished, setHideUnfinished, stillGoingHours, setStillGoingHours, shutdownTime, setShutdownTime }), [weekStartsOn, setWeekStartsOn, hideUnfinished, setHideUnfinished, stillGoingHours, setStillGoingHours, shutdownTime, setShutdownTime])
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
 }

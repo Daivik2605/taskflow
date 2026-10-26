@@ -74,7 +74,7 @@ function TaskForm({ task, onClose, onOpen }: { task: Task; onClose: () => void; 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const kids = childrenOf(tasks, task.id)
+  const kids = childrenOf(tasks, task.id).filter((k) => k.status !== 'dropped')
   const parent = task.parent_id ? tasks.find((t) => t.id === task.parent_id) : null
   const owners = useMemo(() => [...new Set(['me', 'Anikait', 'external', ...tasks.map((t) => t.owner)])], [tasks])
 

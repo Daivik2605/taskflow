@@ -9,6 +9,7 @@ import { useGoals } from '../data/goals'
 import { useTimeIntervals } from '../data/timer'
 import { currentProgress, goalTitle, PERIOD_LABEL } from '../lib/goals'
 import { GoalBar } from './GoalBar'
+import { Top3 } from './Top3'
 import { counterLabel } from '../lib/counters'
 import { useSettings } from '../data/settings'
 import { useTasks } from '../data/tasks'
@@ -95,6 +96,7 @@ export function OverviewStrip({ children }: { children?: ReactNode }) { // child
 
   return (
     <section aria-label="Overview" className="space-y-2">
+      <Top3 />
       <div role="radiogroup" aria-label="Overview period" className="grid grid-cols-3 gap-2 sm:max-w-xs">
         {PERIODS.map((p) => (
           <button key={p.key} type="button" role="radio" aria-checked={period === p.key} onClick={() => setPeriod(p.key)}

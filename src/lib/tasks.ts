@@ -246,10 +246,10 @@ export function reorderWithin<T extends { id: string; sort: number }>(group: T[]
 }
 
 // ───────────── Views (Tasks screen) ─────────────
-export type ViewKey = 'today' | 'upcoming' | 'deadlines' | 'anytime' | 'done'
+export type ViewKey = 'today' | 'upcoming' | 'deadlines' | 'anytime' | 'done' | 'dropped'
 export const VIEWS: { key: ViewKey; label: string }[] = [
   { key: 'today', label: 'Today' }, { key: 'upcoming', label: 'Upcoming' }, { key: 'deadlines', label: 'Deadlines' },
-  { key: 'anytime', label: 'Anytime' }, { key: 'done', label: 'Done' },
+  { key: 'anytime', label: 'Anytime' }, { key: 'done', label: 'Done' }, { key: 'dropped', label: 'Dropped' },
 ]
 
 export interface TaskGroup { key: string; label: string; tasks: Task[]; reorderable: boolean }
@@ -262,7 +262,8 @@ export function inView(t: Task, view: ViewKey, today: Day): boolean {
     case 'upcoming': return isUpcoming(t, today)
     case 'deadlines': return isOpen(t) && t.hard_deadline
     case 'anytime': return isOpen(t) && t.due_on === null && t.start_on === null
-    case 'done': return t.status === 'done' || t.status === 'dropped'
+    case 'done': return t.status === 'done'
+    case 'dropped': return t.status === 'dropped'
   }
 }
 
@@ -301,9 +302,12 @@ export function groupForView(tasks: Task[], view: ViewKey, today: Day): TaskGrou
       const newest = (a: Task, b: Task) => (b.completed_at ?? '').localeCompare(a.completed_at ?? '')
       return [
         ...days.flatMap((d) => make(d, dayLabel(d, today), list.filter((t) => completedDay(t) === d), newest)),
-        ...make('dropped', 'Dropped', list.filter((t) => completedDay(t) === null)),
+        ...make('undated', 'Finished', list.filter((t) => completedDay(t) === null)),
       ]
     }
+    // Dropped is never a hard delete (the shutdown and the Drop buttons set status 'dropped'): the only place these show, with Restore.
+    case 'dropped':
+      return make('dropped', 'Dropped', list, (a, b) => b.updated_at.localeCompare(a.updated_at))
   }
 }
 
@@ -389,7 +393,7 @@ export function quickAddDefaults(view: ViewKey, today: Day): { day: Day | ''; de
   }
 }
 
-/** The first Tasks view that lists this task (Today, Upcoming, Deadlines, Anytime, Done), or null if none does. */
+/** The first Tasks view that lists this task (Today, Upcoming, Deadlines, Anytime, Done, Dropped), or null if none does. */
 export function viewShowing(t: Task, today: Day): ViewKey | null {
   return VIEWS.find((v) => inView(t, v.key, today))?.key ?? null
 }

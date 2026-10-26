@@ -15,18 +15,20 @@ import { useTimeIntervals, useTimer } from '../data/timer'
 import { estimateVsActual, minutesByDayByParent, minutesOnDay, sessionsOnDay, tagMinutes, tagRows as buildTagRows, taskMinutes, topTasks } from '../lib/timer'
 import { effectiveKind } from '../lib/tags'
 import { buildTree } from '../lib/tags'
-import { activeCounters, byHourOfDay, counterLabel, counterStats, forCounter, perDay, perMonth, perWeek, reasonCounts, sumQty, totalBetween, type Bucket, type Counter, type CounterEvent } from '../lib/counters'
+import { activeCounters, byHourOfDay, counterLabel, counterStats, forCounter, perDay, perMonth, perWeek, reasonCounts, sumQty, type Bucket, type Counter, type CounterEvent } from '../lib/counters'
 import { GoalBar } from '../components/GoalBar'
 import { useGoalInputs } from '../data/goalInputs'
 import { useGoals } from '../data/goals'
 import { goalStats, goalTitle, liveGoals, periodLabel, PERIOD_LABEL, LOOKBACK } from '../lib/goals'
 import { reachesToday, resolveRange, stepAnchor, daysIn, type RangeKind } from '../lib/insights'
-import { completedOn, isDoneLate, rangeStats, taskChips, type Task } from '../lib/tasks'
+import { completedOn, isDoneLate, taskChips, type Task } from '../lib/tasks'
 import { addDays, dayOf, formatDay, formatDuration, formatTime, type Day } from '../lib/time'
 import { useNow } from '../app/useNow'
+import { counterSummary, tagSummary, taskSummary } from '../lib/summary'
+import { WeekReview } from './WeekReview'
 
-type Tab = 'day' | 'range' | 'counters' | 'goals'
-const TABS: { key: Tab; label: string }[] = [{ key: 'day', label: 'Day' }, { key: 'range', label: 'Range' }, { key: 'counters', label: 'Counters' }, { key: 'goals', label: 'Goals' }]
+type Tab = 'day' | 'range' | 'counters' | 'goals' | 'review'
+const TABS: { key: Tab; label: string }[] = [{ key: 'day', label: 'Day' }, { key: 'range', label: 'Range' }, { key: 'counters', label: 'Counters' }, { key: 'goals', label: 'Goals' }, { key: 'review', label: 'Review' }]
 const isTab = (v: string | null): v is Tab => TABS.some((t) => t.key === v)
 
 export default function Insights() {
@@ -49,6 +51,7 @@ export default function Insights() {
       {tab === 'range' && <RangeView />}
       {tab === 'counters' && <CounterStats />}
       {tab === 'goals' && <GoalsInsights />}
+      {tab === 'review' && <WeekReview />}
     </section>
   )
 }
@@ -163,7 +166,8 @@ function RangeView() {
   const [custom, setCustom] = useState<{ from: Day; to: Day }>({ from: today, to: today })
 
   const range = resolveRange(kind, anchor, weekStartsOn, custom)
-  const stats = useMemo(() => rangeStats(tasks, range.from, range.to, today), [tasks, range.from, range.to, today])
+  // The same summary functions the evening shutdown and the weekly review use (lib/summary.ts), so the three screens can't disagree.
+  const stats = useMemo(() => taskSummary(tasks, range.from, range.to, today), [tasks, range.from, range.to, today])
   const list = (ts: Task[], empty: string) => ts.length === 0 ? <p className="px-3 py-2 text-sm text-slate-500">{empty}</p> : (
     <ul className="divide-y divide-slate-100 dark:divide-slate-800">
       {ts.map((t) => {
@@ -180,7 +184,7 @@ function RangeView() {
   )
 
   // Time = activity-button logs plus timer segments.
-  const tagRows = useMemo(() => buildTagRows(buildTree(areas), tagMinutes(intervals, range.from, range.to)), [areas, intervals, range.from, range.to])
+  const tagRows = useMemo(() => tagSummary({ areas, sessions: intervals }, range.from, range.to).rows, [areas, intervals, range.from, range.to])
   const studyRows = useMemo(() => tagRows.filter((r) => effectiveKind(areas, r.tag.parent_id, r.tag.kind) === 'study'), [tagRows, areas])
   const perDayTags = useMemo(() => minutesByDayByParent(intervals, areas, range.from, range.to), [intervals, areas, range.from, range.to])
   const chart = useMemo(() => {
@@ -287,8 +291,7 @@ function RangeView() {
       <div className={card}>
         <h2 className="px-3 pt-3 text-sm font-semibold text-slate-500">Counters</h2>
         <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-          {activeCounters(counters).map((c) => {
-            const total = totalBetween(forCounter(events, c.id), range.from, range.to)
+          {counterSummary(counters, events, range.from, range.to).map(({ counter: c, total }) => {
             return <li key={c.id} className="flex items-center justify-between px-3 py-2 text-sm"><span>{c.name}</span><span><b>{total}</b> <span className="text-xs text-slate-500">· {(total / daysIn(range)).toFixed(1)}/day</span></span></li>
           })}
           {counters.length === 0 && <li className="px-3 py-2 text-sm text-slate-500">No counters yet.</li>}

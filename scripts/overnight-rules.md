@@ -31,3 +31,9 @@ Write it **first** (plan), then keep it updated, and make sure the final version
 - **Known issues / follow-ups**
 
 End your final message with the same `STATUS:` line.
+
+## Keep it lean (saves usage)
+- Read only the SPEC sections the phase names, the files you will change, and the code they touch. Grep first; never read whole directories or re-read files you just wrote.
+- While building run only the tests for files you touched; run the full `npm test`, `typecheck`, `build` and `test:schema` once at the end, and again only after a fix.
+- No narration between tool calls. Keep the report short and factual.
+- Phases 4.2, 8, 9, 10 build on existing hooks: reuse `src/data/*`, the sync queue (`src/lib/syncQueue.ts`) and the hidden-screens list rather than adding new patterns. When a screen ships, remove it from the hidden placeholder list.
