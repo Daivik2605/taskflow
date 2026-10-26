@@ -1,0 +1,7 @@
+# Minimal Supabase CLI config, only so `supabase functions deploy` knows this folder. The database is managed with
+# supabase/taskflow_schema.sql in the SQL Editor, not with CLI migrations.
+project_id = "taskflow"
+
+# The personal API token is not a Supabase JWT, so the platform must not demand one; the function checks the token itself.
+[functions.taskflow-api]
+verify_jwt = false

@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { useConnection } from '../app/connection'
 import { useToday } from '../app/useToday'
 import { useProjects } from '../data/projects'
 import { useSettings } from '../data/settings'
@@ -56,7 +55,6 @@ export function TaskSheetProvider({ children }: { children: ReactNode }) {
 function TaskForm({ task, onClose, onOpen }: { task: Task; onClose: () => void; onOpen: (id: string) => void }) {
   const { tasks, update, remove, add, setDone } = useTasks()
   const projects = useProjects()
-  const { writesDisabled } = useConnection()
   const today = useToday()
   const { weekStartsOn } = useSettings()
 
@@ -183,18 +181,18 @@ function TaskForm({ task, onClose, onOpen }: { task: Task; onClose: () => void; 
             {kids.map((k) => (
               <li key={k.id} className="flex items-center gap-1">
                 <button type="button" role="checkbox" aria-checked={k.status === 'done'} aria-label={`${k.status === 'done' ? 'Mark not done' : 'Mark done'}: ${k.title}`}
-                  disabled={writesDisabled} onClick={() => void setDone(k.id, k.status !== 'done')} className="flex h-11 w-11 shrink-0 items-center justify-center disabled:opacity-40">
+                  onClick={() => void setDone(k.id, k.status !== 'done')} className="flex h-11 w-11 shrink-0 items-center justify-center disabled:opacity-40">
                   <span className={`flex h-5 w-5 items-center justify-center rounded border-2 text-xs ${k.status === 'done' ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-400'}`}>{k.status === 'done' ? '✓' : ''}</span>
                 </button>
                 <button type="button" onClick={() => onOpen(k.id)} className={`min-h-11 flex-1 text-left ${k.status === 'done' ? 'text-slate-500 line-through' : ''}`}>{k.title}</button>
-                <button type="button" aria-label={`Delete sub-task: ${k.title}`} disabled={writesDisabled} onClick={() => void remove(k.id)} className="min-h-11 min-w-11 text-slate-500 disabled:opacity-40">✕</button>
+                <button type="button" aria-label={`Delete sub-task: ${k.title}`} onClick={() => void remove(k.id)} className="min-h-11 min-w-11 text-slate-500 disabled:opacity-40">✕</button>
               </li>
             ))}
           </ul>
           <div className="mt-2 flex gap-2">
             <input className={input} value={subTitle} onChange={(e) => setSubTitle(e.target.value)} placeholder="Add a sub-task…" aria-label="New sub-task"
               onKeyDown={(e) => { if (e.key === 'Enter') void addSub(e) }} />
-            <button type="button" className={btn} disabled={!subTitle.trim() || writesDisabled} onClick={(e) => void addSub(e)}>Add</button>
+            <button type="button" className={btn} disabled={!subTitle.trim()} onClick={(e) => void addSub(e)}>Add</button>
           </div>
         </div>
       )}
@@ -202,10 +200,10 @@ function TaskForm({ task, onClose, onOpen }: { task: Task; onClose: () => void; 
       {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       <div className="flex flex-wrap items-center gap-2 pt-2">
-        <button className={`${btnPrimary} flex-1`} disabled={saving || writesDisabled || !title.trim()}>{saving ? 'Saving…' : 'Save'}</button>
+        <button className={`${btnPrimary} flex-1`} disabled={saving || !title.trim()}>{saving ? 'Saving…' : 'Save'}</button>
         <button type="button" className={btn} onClick={onClose}>Cancel</button>
         {!confirmDelete
-          ? <button type="button" className={btnDanger} disabled={writesDisabled} onClick={() => setConfirmDelete(true)}>Delete</button>
+          ? <button type="button" className={btnDanger} onClick={() => setConfirmDelete(true)}>Delete</button>
           : (
             <span className="flex w-full items-center gap-2 rounded-lg bg-red-50 p-2 text-sm dark:bg-red-950/40">
               <span className="flex-1">{kids.length > 0 ? 'Delete this task and its sub-tasks?' : 'Delete this task?'}</span>

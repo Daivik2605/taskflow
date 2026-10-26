@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react'
 import { Icon } from '../app/Icon'
-import { useConnection } from '../app/connection'
 import { useToast } from '../app/toast'
 import { useToday } from '../app/useToday'
 import { useActivities } from '../data/activities'
@@ -20,7 +19,6 @@ export function ActivityButtons() {
 
 function Buttons({ list }: { list: Activity[] }) {
   const { activities, logs, log, removeLog } = useActivities()
-  const { writesDisabled } = useConnection()
   const { weekStartsOn } = useSettings()
   const toast = useToast()
   const today = useToday()
@@ -55,7 +53,7 @@ function Buttons({ list }: { list: Activity[] }) {
             <div key={a.id} className="relative">
               <button
                 type="button"
-                disabled={writesDisabled}
+               
                 aria-pressed={done}
                 aria-label={`${a.name}: ${done ? 'done today' : 'not done today'}, ${label}. ${done && !a.allow_multiple ? 'Tap to take back today\'s log' : `Tap to log ${a.default_minutes} minutes now`}, hold for other options`}
                 onPointerDown={() => startHold(a)}

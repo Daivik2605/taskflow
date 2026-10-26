@@ -990,3 +990,58 @@ end $$;
 -- and the phone's More list can hide screens that are still placeholders (default on).
 alter table public.taskflow_presets  add column if not exists allow_multiple boolean not null default false;
 alter table public.taskflow_settings add column if not exists hide_unfinished_screens boolean not null default true;
+
+-- Phase 4: "Still going?" asks after this many hours of one running stretch.
+alter table public.taskflow_settings add column if not exists still_going_hours int not null default 4;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'taskflow_settings_still_going_hours_range') then
+    alter table public.taskflow_settings add constraint taskflow_settings_still_going_hours_range check (still_going_hours between 1 and 24);
+  end if;
+end $$;
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════════
+-- Phase 3.6: personal API tokens for the `taskflow-api` Edge Function (iPhone Shortcuts, Back Tap, Siri).
+-- Only the SHA-256 of a token is stored; the token itself is shown once in Settings → Shortcuts.
+-- The Edge Function reads these tables with the service-role key (server-side only) and acts on the token owner's rows.
+-- Idempotent: safe to re-run. Nothing is dropped.
+-- ═════════════════════════════════════════════════════════════════════════════════════════════
+create table if not exists public.taskflow_api_tokens (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name          text not null check (length(btrim(name)) between 1 and 60),
+  token_hash    text not null unique check (token_hash ~ '^[0-9a-f]{64}$'),   -- sha-256 hex of the token
+  prefix        text not null,                                                    -- first characters, to recognise it in the list
+  created_at    timestamptz not null default now(),
+  last_used_at  timestamptz,
+  revoked_at    timestamptz
+);
+create index if not exists taskflow_api_tokens_user on public.taskflow_api_tokens (user_id, created_at desc);
+
+create table if not exists public.taskflow_api_log (
+  id        uuid primary key default gen_random_uuid(),
+  user_id   uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  token_id  uuid references public.taskflow_api_tokens(id) on delete set null,
+  endpoint  text not null,
+  at        timestamptz not null default now(),
+  ok        boolean not null,
+  detail    text
+);
+create index if not exists taskflow_api_log_token_at on public.taskflow_api_log (token_id, at desc);
+create index if not exists taskflow_api_log_user_at  on public.taskflow_api_log (user_id, at desc);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['taskflow_api_tokens','taskflow_api_log'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "own rows" on public.%I', t);
+    execute format('create policy "own rows" on public.%I for all to authenticated
+                    using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()))', t);
+  end loop;
+end $$;
+
+-- You can list, create, revoke (update) and delete your tokens; you can read and clear the log but never write to it
+-- (only the Edge Function writes log rows), so the rate limit can't be faked from the app.
+grant select, insert, update, delete on public.taskflow_api_tokens to authenticated;
+grant select, delete on public.taskflow_api_log to authenticated;

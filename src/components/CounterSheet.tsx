@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { useConnection } from '../app/connection'
 import { useToday } from '../app/useToday'
 import { useCounters } from '../data/counters'
 import { bestGapThisWeek, counterLabel, lastEvent, longestGap, forCounter, sinceLabel, todaysEvents, type Counter, type CounterEvent } from '../lib/counters'
@@ -29,7 +28,6 @@ export function CounterSheet({ counter, now, onClose }: { counter: Counter | nul
 function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onClose: () => void }) {
   const { events, tap, removeEvent } = useCounters()
   const [undo, setUndo] = useState<CounterEvent | null>(null)
-  const { writesDisabled } = useConnection()
   const today = useToday()
   const { weekStartsOn } = useSettings()
   const [reason, setReason] = useState('')
@@ -94,9 +92,9 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
 
       <div role="group" aria-label={`${counterLabel(counter)} today`} className="space-y-1">
         <div className="flex items-center justify-between gap-3">
-          <button type="button" className={`${btn} min-h-14 min-w-16 text-2xl`} disabled={writesDisabled || count === 0} onClick={minus} aria-label={`Take one off ${counter.name}`}><span aria-hidden="true">−</span></button>
+          <button type="button" className={`${btn} min-h-14 min-w-16 text-2xl`} disabled={count === 0} onClick={minus} aria-label={`Take one off ${counter.name}`}><span aria-hidden="true">−</span></button>
           <p className="text-center"><span className="block text-4xl font-bold tabular-nums" aria-label={`${count} today`}>{count}</span><span className="text-xs text-slate-500">today</span></p>
-          <button type="button" className={`${btnPrimary} min-h-14 min-w-16 text-2xl`} disabled={writesDisabled} onClick={() => void plus()} aria-label={`Add one to ${counter.name}`}><span aria-hidden="true">+</span></button>
+          <button type="button" className={`${btnPrimary} min-h-14 min-w-16 text-2xl`} onClick={() => void plus()} aria-label={`Add one to ${counter.name}`}><span aria-hidden="true">+</span></button>
         </div>
         {undo && <p role="status" className="text-center text-sm text-slate-600 dark:text-slate-300">Removed the tap at {formatTime(undo.at)}. <button type="button" className="font-medium text-indigo-600 underline dark:text-indigo-400" onClick={() => void putBack()}>Undo</button></p>}
       </div>
@@ -123,7 +121,7 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
           </label>
         )}
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-        <button className={`${btnPrimary} w-full`} disabled={writesDisabled}>Add</button>
+        <button className={`${btnPrimary} w-full`}>Add</button>
       </form>
 
       <div>
@@ -135,8 +133,8 @@ function SheetBody({ counter, now, onClose }: { counter: Counter; now: Date; onC
               : (
                 <li key={t.id} className="flex items-center gap-2 py-1">
                   <span className="flex-1 text-sm">{formatTime(t.at)}{t.qty > 1 ? ` · ×${t.qty}` : ''}{t.reason ? ` · ${t.reason}` : ''}{t.note ? ` · ${t.note}` : ''}</span>
-                  <button type="button" className={`${btn} min-h-9 px-3`} disabled={writesDisabled} onClick={() => setEditing(t.id)} aria-label={`Edit tap at ${formatTime(t.at)}`}>Edit</button>
-                  <button type="button" className={`${btnDanger} min-h-9 px-3`} disabled={writesDisabled} onClick={() => void removeEvent(t.id)} aria-label={`Delete tap at ${formatTime(t.at)}`}>Remove</button>
+                  <button type="button" className={`${btn} min-h-9 px-3`} onClick={() => setEditing(t.id)} aria-label={`Edit tap at ${formatTime(t.at)}`}>Edit</button>
+                  <button type="button" className={`${btnDanger} min-h-9 px-3`} onClick={() => void removeEvent(t.id)} aria-label={`Delete tap at ${formatTime(t.at)}`}>Remove</button>
                 </li>
               ))}
           </ul>

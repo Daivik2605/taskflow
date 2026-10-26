@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { useConnection } from '../app/connection'
 import { useNow } from '../app/useNow'
 import { useToast } from '../app/toast'
 import { useToday } from '../app/useToday'
@@ -44,7 +43,6 @@ function Pills({ list }: { list: Counter[] }) {
   const { counters, events, tap, removeEvent, setReason } = useCounters()
   const { goals } = useGoals()
   const inputs = useGoalInputs()
-  const { writesDisabled } = useConnection()
   const toast = useToast()
   const today = useToday()
   const now = useNow(30_000)
@@ -94,7 +92,7 @@ function Pills({ list }: { list: Counter[] }) {
             <div key={c.id} data-limit={limit.state} className={`flex shrink-0 items-stretch overflow-hidden rounded-full border-2 ${flagged ? LIMIT_STYLE[limit.state as 'at' | 'over'] : 'bg-white dark:bg-slate-900'}`} style={flagged ? undefined : { borderColor: c.color }}>
               <button
                 type="button"
-                disabled={writesDisabled}
+               
                 aria-label={`${limitAria(c, count, limit)} Tap to add one, hold to add at another time`}
                 onPointerDown={() => startHold(c)}
                 onPointerUp={stopHold}
@@ -109,7 +107,7 @@ function Pills({ list }: { list: Counter[] }) {
                 <span className="text-base font-bold tabular-nums">{limit.state === 'none' ? count : limitText(limit)}</span>
               </button>
               {count > 0 && (
-                <button type="button" disabled={writesDisabled} aria-label={`Take one off ${c.name}`} onClick={() => doMinus(c)}
+                <button type="button" aria-label={`Take one off ${c.name}`} onClick={() => doMinus(c)}
                   className="hidden min-h-10 w-8 items-center justify-center border-l border-slate-200 text-base font-bold text-slate-600 disabled:opacity-50 sm:flex dark:border-slate-700 dark:text-slate-300"><span aria-hidden="true">−</span></button>
               )}
               <button type="button" aria-label={`More for ${c.name}: add at another time, edit today's taps`} onClick={() => setSheetFor(c.id)}

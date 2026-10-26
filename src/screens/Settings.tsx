@@ -3,9 +3,10 @@ import { useAuth } from '../app/auth'
 import { ActivitiesSettings } from './settings/ActivitiesSettings'
 import { CountersSettings } from './settings/CountersSettings'
 import { GoalsSettings } from './settings/GoalsSettings'
+import { ShortcutsSettings } from './settings/ShortcutsSettings'
 import { TagsSettings } from './settings/TagsSettings'
 import { useSettings } from '../data/settings'
-import { select, sectionTitle } from '../components/ui'
+import { input, select, sectionTitle } from '../components/ui'
 import { applyTheme, getStoredTheme, type Theme } from '../lib/theme'
 
 const THEMES: { value: Theme; label: string }[] = [
@@ -15,7 +16,7 @@ const THEMES: { value: Theme; label: string }[] = [
 export function Settings() {
   const { session, signOut } = useAuth()
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
-  const { weekStartsOn, setWeekStartsOn, hideUnfinished, setHideUnfinished } = useSettings()
+  const { weekStartsOn, setWeekStartsOn, hideUnfinished, setHideUnfinished, stillGoingHours, setStillGoingHours } = useSettings()
   const pick = (t: Theme) => { setTheme(t); applyTheme(t) }
 
   return (
@@ -58,10 +59,20 @@ export function Settings() {
         </label>
       </div>
 
+      <div>
+        <h2 className={sectionTitle}>Timer</h2>
+        <label className="block text-sm font-medium">Ask “Still going?” after (hours)
+          <input className={`${input} mt-1 w-28`} type="number" min={1} max={24} inputMode="numeric" defaultValue={stillGoingHours} key={stillGoingHours}
+            onBlur={(e) => { const n = Number(e.target.value); if (n !== stillGoingHours) void setStillGoingHours(n) }} />
+        </label>
+        <p className="mt-1 text-xs text-slate-500">A running timer asks whether it is still going, or when it ended, after this long. Presets are the Activities below: one tap logs a finished session.</p>
+      </div>
+
       <GoalsSettings />
       <TagsSettings />
       <ActivitiesSettings />
       <CountersSettings />
+      <ShortcutsSettings />
 
       <p className="text-sm text-slate-500">Actions (phase 5) and Jobs (6) settings arrive in their phases.</p>
     </section>

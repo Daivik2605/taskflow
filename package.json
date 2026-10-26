@@ -9,7 +9,9 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "preview": "vite preview",
-    "test:schema": "bash supabase/tests/run-local.sh"
+    "test:schema": "bash supabase/tests/run-local.sh",
+    "test:functions": "deno test --no-lock supabase/functions/taskflow-api",
+    "check:functions": "deno check supabase/functions/taskflow-api/index.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
@@ -26,6 +28,8 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "deno": "^2.9.6",
+    "fake-indexeddb": "^6.2.6",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",

@@ -164,12 +164,12 @@ describe('counter pills', () => {
     })
   })
 
-  it('are turned off while offline', () => {
-    renderApp(<CounterPills />, { events })
+  it('stay usable while offline: a tap still counts (it is queued and sent later)', () => {
+    const { countersApi } = renderApp(<CounterPills />, { events })
     act(() => { window.dispatchEvent(new Event('offline')) })
-    expect(btn(/^Cigarette/)).toBeDisabled()
-    act(() => { window.dispatchEvent(new Event('online')) })
     expect(btn(/^Cigarette/)).toBeEnabled()
+    fireEvent.click(btn(/^Cigarette/))
+    expect(countersApi.tap).toHaveBeenCalledTimes(1)
   })
   it('render nothing when there are no counters', () => {
     const { container } = renderApp(<CounterPills />, { countersApi: fakeCountersApi([], []) })

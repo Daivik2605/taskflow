@@ -229,3 +229,17 @@ describe('currentProgress (the overview row)', () => {
     expect(x.dayOff).toBe(true)
   })
 })
+
+describe('time goals fill from timer sessions (phase 4)', () => {
+  it('timer segments, including an open one, count toward a tag goal next to other time', async () => {
+    const { newSession, pause, resume, sessionIntervals } = await import('./timer')
+    let t = newSession('s', 'g1', { areaId: 'a-dsa' }, new Date('2026-11-11T14:00:00Z'))
+    t = pause(t, new Date('2026-11-11T14:30:00Z'))
+    t = resume(t, 'g2', new Date('2026-11-11T15:00:00Z'))
+    const now = new Date('2026-11-11T15:20:00Z') // the second stretch is still open: 20 min
+    const w = { from: '2026-11-09', to: '2026-11-15' }
+    const i = inputs({ sessions: [...sessionIntervals([t], now), session('a-study', '2026-11-10', 10)], logs: [] })
+    expect(metricValue(goal({ metric: 'tag_minutes', target_id: 'a-dsa' }), w, i)).toBe(50) // 30 + 20
+    expect(metricValue(goal({ metric: 'tag_minutes', target_id: 'a-study' }), w, i)).toBe(60) // parent: sub-tag time plus its own 10
+  })
+})

@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useConnection } from '../app/connection'
 import { useToast } from '../app/toast'
 import { useToday } from '../app/useToday'
 import { QuickAdd } from '../components/QuickAdd'
@@ -27,7 +26,6 @@ export function Tasks() {
   const { tasks, loading, reorder } = useTasks()
   const { areas } = useAreas()
   const projects = useProjects()
-  const { writesDisabled } = useConnection()
   const toast = useToast()
   const [params, setParams] = useSearchParams()
 
@@ -116,7 +114,6 @@ export function Tasks() {
             </TaskList>
           </div>
         ))}
-      {writesDisabled && <p className="text-xs text-slate-500">Changes are turned off while offline.</p>}
     </section>
   )
 }

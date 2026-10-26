@@ -3,6 +3,8 @@
 
 import { activeCounters, forCounter, totalBetween, type Counter, type CounterEvent } from './counters'
 import { counts, DEADLINE_HORIZON_DAYS, isActive, isOpen, isTopLevel, isUpcoming, windowFor, type Task } from './tasks'
+import type { Area } from './areas'
+import { minutesOfKinds, type Interval } from './timer'
 import { addDays, addMonths, diffDays, monthBounds, type Day } from './time'
 
 export type Period = 'today' | 'week' | 'month'
@@ -76,6 +78,16 @@ export function overview(tasks: Task[], events: CounterEvent[], counters: Counte
   }
 }
 
+export interface TimeCardData { study: number; hustle: number; work: number; total: number }
+
+/** Minutes studying, on hustle and at work in the period (sub-tags count under their parent's kind). Same function family as Insights. */
+export function timeCard(intervals: Interval[], areas: Area[], today: Day, period: Period, weekStart = 1): TimeCardData {
+  const w = windowFor(period, today, weekStart)
+  const get = (kinds: Parameters<typeof minutesOfKinds>[2]) => minutesOfKinds(intervals, areas, kinds, w.from!, w.to!)
+  const study = get(['study']), hustle = get(['hustle']), work = get(['work'])
+  return { study, hustle, work, total: study + hustle + work }
+}
+
 /** Where each card opens. Missed and Completed open Insights → Range on the same period. */
 export const OVERVIEW_LINKS = {
   todo: '/tasks',
@@ -84,6 +96,7 @@ export const OVERVIEW_LINKS = {
   deadlines: '/tasks?view=deadlines',
   missed: (p: Period) => `/insights?tab=range&range=${p === 'today' ? 'day' : p}`,
   completed: (p: Period) => `/insights?tab=range&range=${p === 'today' ? 'day' : p}`,
+  time: (p: Period) => `/insights?tab=range&range=${p === 'today' ? 'day' : p}`,
   counter: (id: string) => `/insights?tab=counters&counter=${id}`,
 }
 

@@ -9,6 +9,7 @@ import { CountersSettings } from './CountersSettings'
 import { TagsSettings } from './TagsSettings'
 import { Settings } from '../Settings'
 
+vi.mock('../../data/db', () => ({ db: () => ({ from: () => { const b: Record<string, unknown> = {}; for (const m of ['select', 'order', 'limit']) b[m] = () => b; b.then = (ok: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(ok); return b } }), friendlyDbError: (e: { message: string }) => e.message }))
 vi.mock('../../app/auth', () => ({ useAuth: () => ({ session: { user: { email: 'me@example.com' } }, signOut: vi.fn() }) }))
 
 const edit = (name: string) => userEvent.click(screen.getByRole('button', { name: `Edit ${name}` }))
@@ -306,5 +307,18 @@ describe('Settings → Screens', () => {
     expect(box).toBeChecked()
     await userEvent.click(box)
     expect(setHideUnfinished).toHaveBeenCalledWith(false)
+  })
+})
+
+describe('Settings → Timer', () => {
+  it('sets the "Still going?" hours', async () => {
+    const setStillGoingHours = vi.fn(async () => {})
+    renderApp(<Settings />, { settingsApi: { setStillGoingHours } })
+    const box = screen.getByLabelText(/Ask “Still going/)
+    expect(box).toHaveValue(4)
+    await userEvent.clear(box)
+    await userEvent.type(box, '6')
+    await userEvent.tab()
+    expect(setStillGoingHours).toHaveBeenCalledWith(6)
   })
 })

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useConnection } from '../app/connection'
 import { useToday } from '../app/useToday'
 import { useActivities } from '../data/activities'
 import { useAreas } from '../data/areas'
 import { useSettings } from '../data/settings'
+import { useTimer } from '../data/timer'
 import { logDay, logMinutes, todayLogs, validateLog, weekLogs, type Activity } from '../lib/activities'
 import { tagPath } from '../lib/tags'
 import { formatDay, formatTime, dayOf, instantToTorontoLocal, parseDuration, torontoLocalToInstant } from '../lib/time'
@@ -31,7 +31,7 @@ function SheetBody({ activity, onClose }: { activity: Activity; onClose: () => v
   const { logs, log, removeLog } = useActivities()
   const { areas } = useAreas()
   const { weekStartsOn } = useSettings()
-  const { writesDisabled } = useConnection()
+  const { requestStart } = useTimer()
   const today = useToday()
   const [minutes, setMinutes] = useState(String(activity.default_minutes))
   const [ended, setEnded] = useState(() => instantToTorontoLocal(new Date()))
@@ -65,6 +65,9 @@ function SheetBody({ activity, onClose }: { activity: Activity; onClose: () => v
         <button type="button" onClick={onClose} className="min-h-11 min-w-11 rounded-lg text-xl" aria-label="Close">✕</button>
       </div>
 
+      <button type="button" className={`${btn} w-full`}
+        onClick={async () => { if (await requestStart({ areaId: activity.area_id, comment: activity.name })) onClose() }}>Start timer instead</button>
+
       <form onSubmit={submit} noValidate className="space-y-3" aria-label="Log with other details">
         <h3 className="text-sm font-semibold text-slate-500">Log with other details</h3>
         <div className="grid grid-cols-2 gap-3">
@@ -76,7 +79,7 @@ function SheetBody({ activity, onClose }: { activity: Activity; onClose: () => v
           </label>
         </div>
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-        <button className={`${btnPrimary} w-full`} disabled={writesDisabled}>{activity.allow_multiple && todays.length > 0 ? 'Add another' : 'Log it'}</button>
+        <button className={`${btnPrimary} w-full`}>{activity.allow_multiple && todays.length > 0 ? 'Add another' : 'Log it'}</button>
       </form>
 
       {activity.allow_multiple && (
@@ -87,7 +90,7 @@ function SheetBody({ activity, onClose }: { activity: Activity; onClose: () => v
               {todays.map((l) => (
                 <li key={l.id} className="flex items-center gap-2 py-1">
                   <span className="flex-1 text-sm">ended {formatTime(l.ended_at)} · {logMinutes(l)} min</span>
-                  <button type="button" className={`${btnDanger} min-h-9 px-3`} disabled={writesDisabled} onClick={() => void removeLog(l.id)}
+                  <button type="button" className={`${btnDanger} min-h-9 px-3`} onClick={() => void removeLog(l.id)}
                     aria-label={`Remove today's log ended ${formatTime(l.ended_at)}`}>Remove</button>
                 </li>
               ))}
@@ -103,7 +106,7 @@ function SheetBody({ activity, onClose }: { activity: Activity; onClose: () => v
             {week.map((l) => (
               <li key={l.id} className="flex items-center gap-2 py-1">
                 <span className="flex-1 text-sm">{formatDay(dayOf(l.ended_at))} · ended {formatTime(l.ended_at)} · {logMinutes(l)} min</span>
-                <button type="button" className={`${btnDanger} min-h-9 px-3`} disabled={writesDisabled} onClick={() => void removeLog(l.id)}
+                <button type="button" className={`${btnDanger} min-h-9 px-3`} onClick={() => void removeLog(l.id)}
                   aria-label={`Delete log: ${formatDay(dayOf(l.ended_at))} ${formatTime(l.ended_at)}`}>Delete</button>
               </li>
             ))}

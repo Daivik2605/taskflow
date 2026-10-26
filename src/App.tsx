@@ -9,7 +9,8 @@ import { Settings } from './screens/Settings'
 import { Tasks } from './screens/Tasks'
 import { Today } from './screens/Today'
 import { Work } from './screens/Work'
-import { Calendar, Inbox, Projects, Timer } from './screens/screens'
+import { Timer } from './screens/Timer'
+import { Calendar, Inbox, Projects } from './screens/screens'
 
 // Insights pulls in the charting library, so it loads only when opened.
 const Insights = lazy(() => import('./screens/Insights'))

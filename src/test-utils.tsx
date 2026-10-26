@@ -13,6 +13,8 @@ import type { Goal } from './lib/goals'
 import { ProjectsContext } from './data/projects'
 import { SettingsContext, type SettingsApi } from './data/settings'
 import { TasksContext, type TasksApi } from './data/tasks'
+import { TimerContext, type TimerApi } from './data/timer'
+import type { Session } from './lib/timer'
 import type { Area } from './lib/areas'
 import type { Activity, ActivityLog } from './lib/activities'
 import type { Counter, CounterEvent } from './lib/counters'
@@ -70,6 +72,15 @@ export function fakeActivitiesApi(activities: Activity[] = ACTIVITIES, logs: Act
   }
 }
 
+export function fakeTimerApi(sessions: Session[] = [], over: Partial<TimerApi> = {}): TimerApi {
+  const active = sessions.find((s) => s.state !== 'stopped') ?? null
+  return {
+    sessions, loading: false, active, taskMinutes: new Map(),
+    requestStart: vi.fn(async () => true), pause: vi.fn(async () => true), resume: vi.fn(async () => true), stop: vi.fn(async () => true),
+    setComment: vi.fn(async () => true), addPast: vi.fn(async () => true), edit: vi.fn(async () => null), remove: vi.fn(async () => true), ...over,
+  }
+}
+
 export function fakeGoalsApi(goals: Goal[] = [], over: Partial<GoalsApi> = {}): GoalsApi {
   return {
     goals, daysOff: new Set(), loading: false,
@@ -83,7 +94,7 @@ interface Opts {
   areas?: Area[]; areasApi?: AreasApi
   counters?: Counter[]; events?: CounterEvent[]; countersApi?: CountersApi
   activities?: Activity[]; logs?: ActivityLog[]; activitiesApi?: ActivitiesApi
-  route?: string; weekStartsOn?: number; hideUnfinished?: boolean; settingsApi?: Partial<SettingsApi>
+  route?: string; sessions?: Session[]; timerApi?: TimerApi; weekStartsOn?: number; hideUnfinished?: boolean; settingsApi?: Partial<SettingsApi>
 }
 
 export function renderApp(ui: ReactElement, o: Opts = {}) {
@@ -92,18 +103,21 @@ export function renderApp(ui: ReactElement, o: Opts = {}) {
   const countersApi = o.countersApi ?? fakeCountersApi(o.counters ?? COUNTERS, o.events ?? [])
   const goalsApi = o.goalsApi ?? fakeGoalsApi(o.goals ?? [])
   const activitiesApi = o.activitiesApi ?? fakeActivitiesApi(o.activities ?? [], o.logs ?? [])
+  const timerApi = o.timerApi ?? fakeTimerApi(o.sessions ?? [])
   const utils = render(
     <ConnectionProvider>
       <MemoryRouter initialEntries={[o.route ?? '/']}>
         <ToastProvider>
-          <SettingsContext.Provider value={{ weekStartsOn: o.weekStartsOn ?? 1, setWeekStartsOn: vi.fn(async () => {}), hideUnfinished: o.hideUnfinished ?? true, setHideUnfinished: vi.fn(async () => {}), ...o.settingsApi }}>
+          <SettingsContext.Provider value={{ weekStartsOn: o.weekStartsOn ?? 1, setWeekStartsOn: vi.fn(async () => {}), hideUnfinished: o.hideUnfinished ?? true, setHideUnfinished: vi.fn(async () => {}), stillGoingHours: 4, setStillGoingHours: vi.fn(async () => {}), ...o.settingsApi }}>
             <AreasContext.Provider value={areasApi}>
               <ProjectsContext.Provider value={[{ id: 'p-aeo', name: 'AEO Studio', status: 'active' }]}>
                 <CountersContext.Provider value={countersApi}>
                   <ActivitiesContext.Provider value={activitiesApi}>
                     <GoalsContext.Provider value={goalsApi}>
                       <TasksContext.Provider value={tasksApi}>
-                        <TaskSheetProvider>{ui}</TaskSheetProvider>
+                        <TimerContext.Provider value={timerApi}>
+                          <TaskSheetProvider>{ui}</TaskSheetProvider>
+                        </TimerContext.Provider>
                       </TasksContext.Provider>
                     </GoalsContext.Provider>
                   </ActivitiesContext.Provider>
@@ -115,7 +129,7 @@ export function renderApp(ui: ReactElement, o: Opts = {}) {
       </MemoryRouter>
     </ConnectionProvider>,
   )
-  return { ...utils, tasksApi, areasApi, countersApi, activitiesApi, goalsApi }
+  return { ...utils, timerApi, tasksApi, areasApi, countersApi, activitiesApi, goalsApi }
 }
 
 /** jsdom has no <dialog> behaviour yet. */

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CounterEvent } from '../lib/counters'
 import { buildLog } from '../lib/activities'
 import { ACTIVITIES, makeDone, makeTask, renderApp } from '../test-utils'
+import { newSession, pastSession, stop } from '../lib/timer'
 import Insights from './Insights'
 
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-10T15:00:00Z')) }) // Tue 10 Nov 10:00 Toronto
@@ -149,7 +150,7 @@ describe('Insights → activities', () => {
   })
   it('the Day summary adds the activity time', () => {
     run()
-    expect(screen.getByText(/1 task done · 35m of activities/)).toBeInTheDocument()
+    expect(screen.getByText(/1 task done · 35m of time/)).toBeInTheDocument()
   })
   it('Range shows time by tag for the week: parent total and sub-tag lines', () => {
     run('/insights?tab=range&range=week')
@@ -161,5 +162,43 @@ describe('Insights → activities', () => {
   it('Range says so when nothing was logged', () => {
     renderApp(<Insights />, { tasks, events, route: '/insights?tab=range&range=week' })
     expect(screen.getByText('No time logged in this range.')).toBeInTheDocument()
+  })
+})
+
+describe('Insights → timer sessions (phase 4)', () => {
+  const at = (iso: string) => new Date(iso)
+  const sessions = [
+    pastSession('s1', 'g1', { areaId: 'a-dsa', taskId: 't1', comment: 'chapter 3', start: at('2026-11-10T13:00:00Z'), end: at('2026-11-10T14:30:00Z') }), // today 8:00-9:30, 1h 30
+    pastSession('s2', 'g2', { areaId: 'a-sql', taskId: 't1', start: at('2026-11-09T14:00:00Z'), end: at('2026-11-09T15:00:00Z') }), // Mon, 1h
+    stop(newSession('s3', 'g3', { areaId: 'a-work' }, at('2026-11-10T11:00:00Z')), at('2026-11-10T11:30:00Z')), // today 6:00, 30m
+  ]
+  const tks = [makeTask({ id: 't1', title: 'Finish Week 3', estimate_minutes: 120 }), makeTask({ id: 't9', title: 'Unrelated', estimate_minutes: 30 })]
+  const run = (route: string) => renderApp(<Insights />, { tasks: tks, events, sessions, route })
+
+  it('Day log lists timer sessions with task, comment and tag, and day totals by tag', () => {
+    run('/insights')
+    const lines = within(screen.getByRole('list', { name: 'Log' })).getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ''))
+    expect(lines).toContain('8:00amFinishWeek3·1h30m·chapter3DSA')
+    expect(screen.getByText(/2h 00m of time/)).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Day totals by tag' })).getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ''))).toEqual(['Study1h30mDSA1h30m', 'Work30m'])
+  })
+  it('Range: time by tag, hours chart, study per sub-tag', () => {
+    run('/insights?tab=range&range=week')
+    expect(within(screen.getByRole('list', { name: 'Time by tag' })).getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByRole('img', { name: 'Hours per day, stacked by tag' })).toBeInTheDocument()
+    const study = within(screen.getByRole('list', { name: 'Studying per sub-tag' })).getAllByRole('listitem')
+    expect(study).toHaveLength(1)
+    expect(study[0]).toHaveTextContent('Study2h 30m')
+    expect(study[0]).toHaveTextContent('DSA1h 30m')
+    expect(study[0]).toHaveTextContent('SQL1h 00m')
+  })
+  it('Range: top tasks by time, and estimate vs actual (only tasks with time in the range)', () => {
+    run('/insights?tab=range&range=week')
+    const top = within(screen.getByRole('list', { name: 'Top tasks by time' })).getAllByRole('listitem')
+    expect(top).toHaveLength(1)
+    expect(top[0]).toHaveTextContent('Finish Week 32h 30m')
+    const est = within(screen.getByRole('list', { name: 'Estimate vs actual' })).getAllByRole('listitem')
+    expect(est).toHaveLength(1)
+    expect(est[0]).toHaveTextContent('2h 30m of 2h 00m · over by 30m')
   })
 })

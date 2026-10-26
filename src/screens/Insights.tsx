@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { TagLabel } from '../components/TagLabel'
 import { btn, card, input } from '../components/ui'
 import { useToday } from '../app/useToday'
@@ -10,7 +10,10 @@ import { useActivities } from '../data/activities'
 import { useCounters } from '../data/counters'
 import { useSettings } from '../data/settings'
 import { useTasks } from '../data/tasks'
-import { logDay, logMinutes, minutesByTag } from '../lib/activities'
+import { logDay, logMinutes } from '../lib/activities'
+import { useTimeIntervals, useTimer } from '../data/timer'
+import { estimateVsActual, minutesByDayByParent, minutesOnDay, sessionsOnDay, tagMinutes, tagRows as buildTagRows, taskMinutes, topTasks } from '../lib/timer'
+import { effectiveKind } from '../lib/tags'
 import { buildTree } from '../lib/tags'
 import { activeCounters, byHourOfDay, counterLabel, counterStats, forCounter, perDay, perMonth, perWeek, reasonCounts, sumQty, totalBetween, type Bucket, type Counter, type CounterEvent } from '../lib/counters'
 import { GoalBar } from '../components/GoalBar'
@@ -19,7 +22,8 @@ import { useGoals } from '../data/goals'
 import { goalStats, goalTitle, liveGoals, periodLabel, PERIOD_LABEL, LOOKBACK } from '../lib/goals'
 import { reachesToday, resolveRange, stepAnchor, daysIn, type RangeKind } from '../lib/insights'
 import { completedOn, isDoneLate, rangeStats, taskChips, type Task } from '../lib/tasks'
-import { addDays, formatDay, formatDuration, formatTime, type Day } from '../lib/time'
+import { addDays, dayOf, formatDay, formatDuration, formatTime, type Day } from '../lib/time'
+import { useNow } from '../app/useNow'
 
 type Tab = 'day' | 'range' | 'counters' | 'goals'
 const TABS: { key: Tab; label: string }[] = [{ key: 'day', label: 'Day' }, { key: 'range', label: 'Range' }, { key: 'counters', label: 'Counters' }, { key: 'goals', label: 'Goals' }]
@@ -77,15 +81,26 @@ function DayLog() {
   const { areas } = useAreas()
   const { counters, events } = useCounters()
   const { activities, logs } = useActivities()
+  const { sessions } = useTimer()
+  const intervals = useTimeIntervals()
+  const now = useNow(30_000)
   const [day, setDay] = useState<Day>(today)
 
   const done = useMemo(() => completedOn(tasks, day), [tasks, day])
   const taps = useMemo(() => events.filter((e) => e.day === day).sort((a, b) => a.at.localeCompare(b.at)), [events, day])
   const totals = activeCounters(counters).map((c) => ({ c, n: sumQty(taps.filter((e) => e.counter_id === c.id)) })).filter((x) => x.n > 0)
   const dayLogs = useMemo(() => logs.filter((l) => logDay(l) === day), [logs, day])
-  const minutes = dayLogs.reduce((n, l) => n + logMinutes(l), 0)
+  const daySessions = useMemo(() => sessionsOnDay(sessions, day, now), [sessions, day, now])
+  const minutes = dayLogs.reduce((n, l) => n + logMinutes(l), 0) + daySessions.reduce((n, s) => n + minutesOnDay(s, day, now), 0)
+  const dayTags = useMemo(() => buildTagRows(buildTree(areas), tagMinutes(intervals, day, day)), [areas, intervals, day])
   const timeline = [
     ...done.map((t) => ({ at: t.completed_at!, key: `t-${t.id}`, node: <TaskLine task={t} tag={areas.find((a) => a.id === t.area_id)} today={today} /> })),
+    ...daySessions.map((s) => {
+      const tag = areas.find((x) => x.id === s.area_id)
+      const task = tasks.find((t) => t.id === s.task_id)
+      const first = s.segments.find((g) => dayOf(g.started_at) === day)?.started_at ?? s.started_at
+      return { at: first, key: `s-${s.id}`, node: <span>{task ? `${task.title} · ` : ''}{formatDuration(minutesOnDay(s, day, now))}{s.comment ? ` · ${s.comment}` : ''}{s.state !== 'stopped' ? ' · running' : ''}{tag && <> <span className="ml-2 text-xs text-slate-500"><TagLabel tag={tag} /></span></>}</span> }
+    }),
     ...dayLogs.map((l) => { const a = activities.find((x) => x.id === l.preset_id); const tag = areas.find((x) => x.id === l.area_id); return { at: l.ended_at, key: `a-${l.id}`, node: <span>{a?.name ?? tag?.name ?? 'Activity'} · {logMinutes(l)} min{tag && <> <span className="ml-2 text-xs text-slate-500"><TagLabel tag={tag} /></span></>}</span> } }),
     ...taps.map((e) => { const c = counters.find((x) => x.id === e.counter_id); return { at: e.at, key: `e-${e.id}`, node: <span>{c?.name ?? 'Counter'}{e.qty > 1 ? ` ×${e.qty}` : ''}{e.note ? ` · ${e.note}` : ''}</span> } }),
   ].sort((a, b) => a.at.localeCompare(b.at))
@@ -98,8 +113,10 @@ function DayLog() {
       <input className={input} type="date" aria-label="Go to day" value={day} max={today} onChange={(e) => e.target.value && setDay(e.target.value)} />
 
       <p className="text-sm text-slate-600 dark:text-slate-400">
-        {done.length} task{done.length === 1 ? '' : 's'} done{minutes > 0 ? ` · ${formatDuration(minutes)} of activities` : ''}{totals.map(({ c, n }) => ` · ${counterLabel(c)} ${n}`).join('')}
+        {done.length} task{done.length === 1 ? '' : 's'} done{minutes > 0 ? ` · ${formatDuration(minutes)} of time` : ''}{totals.map(({ c, n }) => ` · ${counterLabel(c)} ${n}`).join('')}
       </p>
+
+      {dayTags.length > 0 && <TagRowsList rows={dayTags} label="Day totals by tag" />}
 
       {timeline.length === 0 ? <p className="text-sm text-slate-500">Nothing logged for this day.</p> : (
         <ol className={`${card} divide-y divide-slate-100 dark:divide-slate-800`} aria-label="Log">
@@ -118,13 +135,27 @@ function DayLog() {
 // ───────────── Range ─────────────
 const RANGE_KINDS: { key: RangeKind; label: string }[] = [{ key: 'day', label: 'Day' }, { key: 'week', label: 'Week' }, { key: 'month', label: 'Month' }, { key: 'custom', label: 'Custom' }]
 
+function TagRowsList({ rows, label }: { rows: ReturnType<typeof buildTagRows>; label: string }) {
+  return (
+    <ul className="divide-y divide-slate-100 dark:divide-slate-800" aria-label={label}>
+      {rows.map((r) => (
+        <li key={r.tag.id} className="px-3 py-2 text-sm">
+          <div className="flex items-center justify-between"><span className="font-medium"><TagLabel tag={r.tag} /></span><b>{formatDuration(r.total)}</b></div>
+          {r.general > 0 && r.kids.length > 0 && <div className="flex justify-between pl-4 text-xs text-slate-500"><span>general</span><span>{formatDuration(r.general)}</span></div>}
+          {r.kids.map((k) => <div key={k.tag.id} className="flex justify-between pl-4 text-xs text-slate-500"><span><TagLabel tag={k.tag} /></span><span>{formatDuration(k.minutes)}</span></div>)}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function RangeView() {
   const today = useToday()
   const { weekStartsOn } = useSettings()
   const { tasks } = useTasks()
   const { areas } = useAreas()
   const { counters, events } = useCounters()
-  const { logs } = useActivities()
+  const intervals = useTimeIntervals()
   const [params] = useSearchParams()
   const fromLink = params.get('range')
   const [kind, setKind] = useState<RangeKind>(fromLink === 'day' || fromLink === 'week' || fromLink === 'month' ? fromLink : 'week') // ?range= from the Today overview cards
@@ -148,13 +179,21 @@ function RangeView() {
     </ul>
   )
 
-  // Minimal time reading for phase 2.7: activity logs only. The full timer adds its own sessions in phase 4.
-  const byTag = useMemo(() => minutesByTag(logs, range.from, range.to), [logs, range.from, range.to])
-  const tagRows = useMemo(() => buildTree(areas).map((n) => {
-    const kids = n.children.map((c) => ({ tag: c, minutes: byTag.get(c.id) ?? 0 })).filter((k) => k.minutes > 0)
-    const general = byTag.get(n.tag.id) ?? 0
-    return { tag: n.tag, general, kids, total: general + kids.reduce((m, k) => m + k.minutes, 0) }
-  }).filter((r) => r.total > 0), [areas, byTag])
+  // Time = activity-button logs plus timer segments.
+  const tagRows = useMemo(() => buildTagRows(buildTree(areas), tagMinutes(intervals, range.from, range.to)), [areas, intervals, range.from, range.to])
+  const studyRows = useMemo(() => tagRows.filter((r) => effectiveKind(areas, r.tag.parent_id, r.tag.kind) === 'study'), [tagRows, areas])
+  const perDayTags = useMemo(() => minutesByDayByParent(intervals, areas, range.from, range.to), [intervals, areas, range.from, range.to])
+  const chart = useMemo(() => {
+    const parents = tagRows.map((r) => r.tag)
+    const rows: Record<string, number | string>[] = []
+    for (let d = range.from; d <= range.to && rows.length < 400; d = addDays(d, 1)) {
+      const m = perDayTags.get(d)
+      rows.push({ day: d.slice(5), ...Object.fromEntries(parents.map((p) => [p.id, Math.round(((m?.get(p.id) ?? 0) / 60) * 100) / 100])) })
+    }
+    return { parents, rows }
+  }, [tagRows, perDayTags, range.from, range.to])
+  const top = useMemo(() => topTasks(intervals, range.from, range.to, 5), [intervals, range.from, range.to])
+  const est = useMemo(() => estimateVsActual(tasks, taskMinutes(intervals), new Set(topTasks(intervals, range.from, range.to, 9999).map((t) => t.task_id))), [tasks, intervals, range.from, range.to])
 
   const cards = [
     { label: 'Tasks done', n: stats.done.length, tone: 'text-emerald-600 dark:text-emerald-400' },
@@ -195,14 +234,50 @@ function RangeView() {
       <details open className={card}><summary className="min-h-11 cursor-pointer px-3 py-2 font-medium">Deadlines missed · {stats.deadlinesMissed.length}</summary>{list(stats.deadlinesMissed, 'No deadlines missed.')}</details>
 
       <div className={card}>
-        <h2 className="px-3 pt-3 text-sm font-semibold text-slate-500">Time by tag <span className="font-normal">· activities so far; the timer adds its sessions in a later phase</span></h2>
-        {tagRows.length === 0 ? <p className="px-3 py-2 text-sm text-slate-500">No time logged in this range.</p> : (
-          <ul className="divide-y divide-slate-100 dark:divide-slate-800" aria-label="Time by tag">
-            {tagRows.map((r) => (
-              <li key={r.tag.id} className="px-3 py-2 text-sm">
-                <div className="flex items-center justify-between"><span className="font-medium"><TagLabel tag={r.tag} /></span><b>{formatDuration(r.total)}</b></div>
-                {r.general > 0 && r.kids.length > 0 && <div className="flex justify-between pl-4 text-xs text-slate-500"><span>general</span><span>{formatDuration(r.general)}</span></div>}
-                {r.kids.map((k) => <div key={k.tag.id} className="flex justify-between pl-4 text-xs text-slate-500"><span><TagLabel tag={k.tag} /></span><span>{formatDuration(k.minutes)}</span></div>)}
+        <h2 className="px-3 pt-3 text-sm font-semibold text-slate-500">Time by tag</h2>
+        {tagRows.length === 0 ? <p className="px-3 py-2 text-sm text-slate-500">No time logged in this range.</p> : <TagRowsList rows={tagRows} label="Time by tag" />}
+      </div>
+
+      {chart.parents.length > 0 && (
+        <div className={`${card} p-3`}>
+          <h3 className="mb-2 text-sm font-semibold text-slate-500">Hours per day</h3>
+          <div style={{ width: '100%', height: 220 }} role="img" aria-label="Hours per day, stacked by tag">
+            <ResponsiveContainer>
+              <BarChart data={chart.rows}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="day" fontSize={11} />
+                <YAxis fontSize={11} width={28} />
+                <Tooltip />
+                <Legend />
+                {chart.parents.map((p) => <Bar key={p.id} dataKey={p.id} name={p.name} stackId="h" fill={p.color} />)}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      <div className={card}>
+        <h2 className="px-3 pt-3 text-sm font-semibold text-slate-500">Studying, per sub-tag</h2>
+        {studyRows.length === 0 ? <p className="px-3 py-2 text-sm text-slate-500">No study time in this range.</p> : <TagRowsList rows={studyRows} label="Studying per sub-tag" />}
+      </div>
+
+      <div className={card}>
+        <h2 className="px-3 pt-3 text-sm font-semibold text-slate-500">Top tasks by time</h2>
+        {top.length === 0 ? <p className="px-3 py-2 text-sm text-slate-500">No time on tasks in this range.</p> : (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800" aria-label="Top tasks by time">
+            {top.map((t) => <li key={t.task_id} className="flex justify-between px-3 py-2 text-sm"><span>{tasks.find((x) => x.id === t.task_id)?.title ?? 'Deleted task'}</span><b>{formatDuration(t.minutes)}</b></li>)}
+          </ul>
+        )}
+      </div>
+
+      <div className={card}>
+        <h2 className="px-3 pt-3 text-sm font-semibold text-slate-500">Estimate vs actual</h2>
+        {est.length === 0 ? <p className="px-3 py-2 text-sm text-slate-500">No task with an estimate and time in this range.</p> : (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800" aria-label="Estimate vs actual">
+            {est.map((r) => (
+              <li key={r.task.id} className="flex justify-between gap-2 px-3 py-2 text-sm">
+                <span className="min-w-0 truncate">{r.task.title}</span>
+                <span className={r.over ? 'font-semibold text-amber-600 dark:text-amber-400' : ''}>{formatDuration(r.actual)} of {formatDuration(r.estimate)}{r.over ? ` · over by ${formatDuration(r.actual - r.estimate)}` : ''}</span>
               </li>
             ))}
           </ul>

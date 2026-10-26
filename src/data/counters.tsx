@@ -3,6 +3,8 @@ import { useConnection } from '../app/connection'
 import { useToast } from '../app/toast'
 import { applyEventChange, buildEvent, byCounterSort, cleanReasons, nextCounterSort, validateCounterName, validateReasons, type Counter, type CounterEvent } from '../lib/counters'
 import { db, fetchAll, friendlyDbError } from './db'
+import { RESYNC_EVENT, useOutbox } from './outbox'
+import { useOfflineCache } from './useOfflineCache'
 
 export interface CountersApi {
   counters: Counter[] // every counter, archived included
@@ -42,6 +44,14 @@ export function CountersProvider({ children }: { children: ReactNode }) {
   const setEvents = useCallback((fn: (p: CounterEvent[]) => CounterEvent[]) => { eRef.current = fn(eRef.current); setEventsState(eRef.current) }, [])
   const writesOff = useRef(writesDisabled)
   writesOff.current = writesDisabled
+  const outbox = useOutbox()
+  const outboxRef = useRef(outbox)
+  outboxRef.current = outbox
+  const loadedRef = useRef(false)
+
+  // Last loaded data stays on the device, so the app opens (and logging works) offline.
+  const cached = useMemo(() => ({ counters, events }), [counters, events])
+  useOfflineCache('counters', cached, !loading, (s) => { setCounters(() => s.counters); setEvents(() => s.events); setLoading(false) }, () => loadedRef.current)
 
   useEffect(() => {
     const client = db()
@@ -54,6 +64,8 @@ export function CountersProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       if (c.error) { reportError(friendlyDbError(c.error)); return }
       if (e.error) { reportError(friendlyDbError(e.error)); return }
+      if (outboxRef.current.hasPending()) return // writes are waiting to be sent: loading now would hide them; a reload follows the sync
+      loadedRef.current = true
       setCounters(() => (c.data ?? []) as Counter[])
       setEvents(() => e.data)
       setLoading(false)
@@ -77,58 +89,47 @@ export function CountersProvider({ children }: { children: ReactNode }) {
         }
       })
     const onVisible = () => { if (document.visibilityState === 'visible') void load() }
+    const onResync = () => void load()
     document.addEventListener('visibilitychange', onVisible)
-    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible); void client.removeChannel(channel) }
+    window.addEventListener(RESYNC_EVENT, onResync)
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible); window.removeEventListener(RESYNC_EVENT, onResync); void client.removeChannel(channel) }
   }, [setCounters, setEvents, reportError])
 
   const offline = useCallback(() => toast.show("You're offline or Supabase is unreachable — changes are turned off."), [toast])
 
+  // Logging goes through the offline queue (lib/syncQueue.ts): the screen changes at once and the write is sent when the network allows.
   const tap = useCallback<CountersApi['tap']>(async (counterId, opts = {}) => {
-    if (writesOff.current) { offline(); return null }
     const { at = new Date(), qty = 1, note = null, reason = null, id = crypto.randomUUID() } = opts
     const ev = buildEvent(counterId, at, id, qty, note, reason)
-    setEvents((l) => [...l, ev])
-    const { error } = await db().from('taskflow_counter_events').insert({ id: ev.id, counter_id: ev.counter_id, at: ev.at, day: ev.day, qty: ev.qty, note: ev.note, reason: ev.reason })
-    if (error) {
-      setEvents((l) => l.filter((x) => x.id !== ev.id))
-      toast.show(`Couldn't record that: ${friendlyDbError(error)}`, () => void tap(counterId, { at, qty, note, reason }))
-      return null
-    }
+    setEvents((l) => (l.some((x) => x.id === id) ? l : [...l, ev]))
+    outboxRef.current.enqueue({ kind: 'counter.tap', row: { id: ev.id, counter_id: ev.counter_id, at: ev.at, day: ev.day, qty: ev.qty, note: ev.note, reason: ev.reason } })
     return ev
-  }, [offline, setEvents, toast])
+  }, [setEvents])
 
   const removeEvent = useCallback<CountersApi['removeEvent']>(async (id) => {
-    if (writesOff.current) { offline(); return false }
-    const prev = eRef.current.find((e) => e.id === id)
-    if (!prev) return false
+    if (!eRef.current.some((e) => e.id === id)) return false
     setEvents((l) => l.filter((e) => e.id !== id))
-    const { error } = await db().from('taskflow_counter_events').delete().eq('id', id)
-    if (error) { setEvents((l) => [...l, prev]); toast.show(`Couldn't remove it: ${friendlyDbError(error)}`); return false }
+    outboxRef.current.enqueue({ kind: 'counter.remove', id })
     return true
-  }, [offline, setEvents, toast])
+  }, [setEvents])
 
   const editEvent = useCallback<CountersApi['editEvent']>(async (id, patch) => {
-    if (writesOff.current) { offline(); return false }
     const prev = eRef.current.find((e) => e.id === id)
     if (!prev) return false
     const reason = patch.reason !== undefined ? patch.reason : prev.reason
     const note = patch.note !== undefined ? patch.note : prev.note
     const next = patch.at ? buildEvent(prev.counter_id, patch.at, id, patch.qty ?? prev.qty, note, reason) : { ...prev, qty: patch.qty ?? prev.qty, note, reason }
     setEvents((l) => l.map((e) => (e.id === id ? next : e)))
-    const { error } = await db().from('taskflow_counter_events').update({ at: next.at, qty: next.qty, note: next.note, reason: next.reason }).eq('id', id)
-    if (error) { setEvents((l) => l.map((e) => (e.id === id ? prev : e))); toast.show(`Couldn't save the change: ${friendlyDbError(error)}`); return false }
+    outboxRef.current.enqueue({ kind: 'counter.update', id, patch: { at: next.at, day: next.day, qty: next.qty, note: next.note, reason: next.reason } })
     return true
-  }, [offline, setEvents, toast])
+  }, [setEvents])
 
   const setReason = useCallback<CountersApi['setReason']>(async (id, reason) => {
-    if (writesOff.current) { offline(); return false }
-    const prev = eRef.current.find((e) => e.id === id)
-    if (!prev) return false
+    if (!eRef.current.some((e) => e.id === id)) return false
     setEvents((l) => l.map((e) => (e.id === id ? { ...e, reason } : e)))
-    const { error } = await db().from('taskflow_counter_events').update({ reason }).eq('id', id)
-    if (error) { setEvents((l) => l.map((e) => (e.id === id ? prev : e))); toast.show(`Couldn't save the reason: ${friendlyDbError(error)}`); return false }
+    outboxRef.current.enqueue({ kind: 'counter.update', id, patch: { reason } })
     return true
-  }, [offline, setEvents, toast])
+  }, [setEvents])
 
   const addCounter = useCallback<CountersApi['addCounter']>(async ({ name, short_label, color }) => {
     if (writesOff.current) { offline(); return 'Changes are turned off while offline.' }

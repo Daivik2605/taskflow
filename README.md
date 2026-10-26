@@ -109,3 +109,27 @@ Two new columns; until you run this the app shows "The database is out of date".
 select name, allow_multiple from taskflow_presets order by sort;      -- all false
 select hide_unfinished_screens from taskflow_settings;               -- true
 ```
+
+## Phase 4: run the SQL (timer)
+One new column. Until you run it the app shows "The database is out of date".
+
+1. Supabase → SQL Editor → New query → paste the **whole** of `supabase/taskflow_schema.sql` → Run (adds only, safe to re-run).
+2. It adds `taskflow_settings.still_going_hours` (default 4, between 1 and 24). The timer tables and the "one running timer" index already exist from phase 1.
+
+**What to check afterwards** (read-only):
+```sql
+select still_going_hours from taskflow_settings;                                   -- 4
+select indexname from pg_indexes where indexname = 'taskflow_one_active_session';  -- one row
+```
+
+## Phase 3.6: Shortcuts, Back Tap and Siri (run the SQL, deploy the function)
+1. SQL Editor: paste the whole of `supabase/taskflow_schema.sql` → Run (adds `taskflow_api_tokens` and `taskflow_api_log`; safe to re-run).
+2. Deploy: `supabase link --project-ref <ref>` then `supabase functions deploy taskflow-api --no-verify-jwt` (full steps, the Shortcuts, Back Tap, Siri and Action button guide: `docs/SHORTCUTS.md`).
+3. Settings → Shortcuts → create a token and copy it (shown once).
+4. Tests: `npm run test:functions` (Deno: auth, wrong user, revoked token, rate limit, each endpoint).
+
+**What to check afterwards** (read-only):
+```sql
+select name, prefix, last_used_at, revoked_at from taskflow_api_tokens;   -- your token; last_used_at fills in after the first call
+select endpoint, ok, at from taskflow_api_log order by at desc limit 5;
+```

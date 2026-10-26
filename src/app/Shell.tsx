@@ -1,5 +1,7 @@
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { CounterPills } from '../components/CounterPills'
+import { RunningBar } from '../components/RunningBar'
+import { SyncChip } from '../components/SyncChip'
 import { UpdateBanner } from '../pwa/UpdateBanner'
 import { ConnectionBanner } from './ConnectionBanner'
 import { Icon } from './Icon'
@@ -32,8 +34,10 @@ export function Shell() {
 
       <div className="flex min-h-0 flex-1 flex-col">
         <CounterPills />
+        <SyncChip />
         <ConnectionBanner />
         <UpdateBanner />
+        <RunningBar />
         <main className="min-h-0 flex-1 overflow-y-auto p-4 pb-24 lg:p-8 lg:pb-8">
           <Outlet />
         </main>

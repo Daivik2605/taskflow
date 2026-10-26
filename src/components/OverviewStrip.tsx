@@ -6,12 +6,14 @@ import { useActivities } from '../data/activities'
 import { useAreas } from '../data/areas'
 import { useGoalInputs } from '../data/goalInputs'
 import { useGoals } from '../data/goals'
+import { useTimeIntervals } from '../data/timer'
 import { currentProgress, goalTitle, PERIOD_LABEL } from '../lib/goals'
 import { GoalBar } from './GoalBar'
 import { counterLabel } from '../lib/counters'
 import { useSettings } from '../data/settings'
 import { useTasks } from '../data/tasks'
-import { OVERVIEW_LINKS, PERIODS, deadlineLabel, isPeriod, overview, type Period } from '../lib/overview'
+import { OVERVIEW_LINKS, PERIODS, deadlineLabel, isPeriod, overview, timeCard, type Period } from '../lib/overview'
+import { formatDuration } from '../lib/time'
 import { card } from './ui'
 
 const KEY = 'taskflow-overview-period'
@@ -80,12 +82,15 @@ export function OverviewStrip({ children }: { children?: ReactNode }) { // child
   const { weekStartsOn } = useSettings()
   const { tasks, loading: tasksLoading } = useTasks()
   const { counters, events, loading: countersLoading } = useCounters()
+  const { areas } = useAreas()
+  const intervals = useTimeIntervals()
   const [period, setPeriodState] = useState<Period>(storedPeriod)
   const setPeriod = (p: Period) => {
     setPeriodState(p)
     try { localStorage.setItem(KEY, p) } catch { /* private mode: the choice just won't persist */ }
   }
   const o = useMemo(() => overview(tasks, events, counters, today, period, weekStartsOn), [tasks, events, counters, today, period, weekStartsOn])
+  const time = useMemo(() => timeCard(intervals, areas, today, period, weekStartsOn), [intervals, areas, today, period, weekStartsOn])
   const when = PERIODS.find((p) => p.key === period)!.label.toLowerCase()
 
   return (
@@ -110,6 +115,9 @@ export function OverviewStrip({ children }: { children?: ReactNode }) { // child
               value={<>{o.missed.tasks} <span className="text-slate-400">/</span> {o.missed.deadlines}</>} sub="tasks / deadlines"
               aria={`Missed ${when}: ${o.missed.tasks} tasks, ${o.missed.deadlines} deadlines`} />
             <OverviewCard label="Completed" to={OVERVIEW_LINKS.completed(period)} value={o.completed} tone="text-emerald-600 dark:text-emerald-400" aria={`Completed ${when}: ${o.completed}`} />
+            <OverviewCard label="Time" to={OVERVIEW_LINKS.time(period)} value={formatDuration(time.total)}
+              sub={`study ${formatDuration(time.study)} · hustle ${formatDuration(time.hustle)} · work ${formatDuration(time.work)}`}
+              aria={`Time ${when}: ${formatDuration(time.total)}. Study ${formatDuration(time.study)}, hustle ${formatDuration(time.hustle)}, work ${formatDuration(time.work)}`} />
           </>
         )}
         {countersLoading ? <><Skeleton /><Skeleton /></> : o.counters.map(({ counter, total, change }) => (

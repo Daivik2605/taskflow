@@ -4,6 +4,7 @@ const PATHS: Record<string, string> = {
   timer: 'M12 8v5l3 2M9 2h6M12 4a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
   calendar: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
   insights: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  play: 'M7 4l13 8-13 8z',
   check: 'M20 6 9 17l-5-5',
   up: 'M18 15l-6-6-6 6',
   down: 'M6 9l6 6 6-6',

@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useConnection } from '../app/connection'
-import { useToast } from '../app/toast'
 import { applyChange, applyStatus, buildNewTask, nextSort, type NewTaskInput, type Task, type TaskStatus } from '../lib/tasks'
-import { db, errorMessage, fetchAll, friendlyDbError } from './db'
+import { RESYNC_EVENT, useOutbox } from './outbox'
+import { useOfflineCache } from './useOfflineCache'
+import { db, fetchAll, friendlyDbError } from './db'
 
 export type TaskPatch = Partial<Pick<Task, 'title' | 'description' | 'area_id' | 'project_id' | 'start_on' | 'due_on' | 'hard_deadline' | 'estimate_minutes' | 'priority' | 'owner' | 'waiting_on' | 'tags' | 'sort'>> & { status?: TaskStatus }
 
@@ -28,7 +29,6 @@ const COLUMNS = 'id,title,description,area_id,project_id,parent_id,start_on,due_
 
 export function TasksProvider({ children }: { children: ReactNode }) {
   const { writesDisabled, reportError } = useConnection()
-  const toast = useToast()
   const [tasks, setTasksState] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const ref = useRef<Task[]>([])
@@ -38,6 +38,12 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   }, [])
   const writesOff = useRef(writesDisabled)
   writesOff.current = writesDisabled
+  const outbox = useOutbox()
+  const outboxRef = useRef(outbox)
+  outboxRef.current = outbox
+  const loadedRef = useRef(false)
+
+  useOfflineCache('tasks', tasks, !loading, (saved) => { ref.current = saved; setTasksState(saved); setLoading(false) }, () => loadedRef.current)
 
   // Load, then keep in sync with other windows/devices.
   useEffect(() => {
@@ -47,6 +53,8 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       const { data, error } = await fetchAll<Task>('taskflow_tasks', COLUMNS, 'sort')
       if (cancelled) return
       if (error) { reportError(friendlyDbError(error)); return }
+      if (outboxRef.current.hasPending()) return // writes are waiting to be sent; a reload follows the sync
+      loadedRef.current = true
       ref.current = data
       setTasksState(ref.current)
       setLoading(false)
@@ -67,67 +75,53 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         }
       })
     const onVisible = () => { if (document.visibilityState === 'visible') void load() }
+    const onResync = () => void load()
     document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener(RESYNC_EVENT, onResync)
     return () => {
       cancelled = true
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener(RESYNC_EVENT, onResync)
       void client.removeChannel(channel)
     }
   }, [setTasks, reportError])
 
-  /** Runs an optimistic write: apply locally, send, and on failure roll back and offer Retry. */
-  const write = useCallback(async (label: string, optimistic: () => () => void, send: () => PromiseLike<{ error: { message: string } | null }>): Promise<boolean> => {
-    if (writesOff.current) { toast.show("You're offline or Supabase is unreachable — changes are turned off."); return false }
-    const rollback = optimistic()
-    const { error } = await send()
-    if (!error) return true
-    rollback()
-    toast.show(`${label} failed: ${friendlyDbError(error)}`, () => void write(label, optimistic, send))
-    return false
-  }, [toast])
-
+  // Task writes go through the offline queue: the screen changes at once and the write is sent when the network allows.
   const add = useCallback<TasksApi['add']>(async (input) => {
     const row = buildNewTask(input, nextSort(ref.current), new Date(), crypto.randomUUID())
     if (!row) return null
+    setTasks((l) => [...l, row])
     const { id, title, description, area_id, project_id, parent_id, start_on, due_on, hard_deadline, estimate_minutes, priority, status, owner, waiting_on, tags, completed_at, sort } = row
-    const ok = await write('Adding the task',
-      () => { setTasks((l) => [...l, row]); return () => setTasks((l) => l.filter((t) => t.id !== id)) },
-      () => db().from('taskflow_tasks').insert({ id, title, description, area_id, project_id, parent_id, start_on, due_on, hard_deadline, estimate_minutes, priority, status, owner, waiting_on, tags, completed_at, sort }))
-    return ok ? row : null
-  }, [write, setTasks])
+    outboxRef.current.enqueue({ kind: 'task.put', row: { id, title, description, area_id, project_id, parent_id, start_on, due_on, hard_deadline, estimate_minutes, priority, status, owner, waiting_on, tags, completed_at, sort } })
+    return row
+  }, [setTasks])
 
   const update = useCallback<TasksApi['update']>(async (id, patch) => {
     const prev = ref.current.find((t) => t.id === id)
     if (!prev) return false
     const body: Record<string, unknown> = { ...patch }
     if (patch.status !== undefined) Object.assign(body, applyStatus(prev, patch.status, new Date()))
-    return write('Saving the task',
-      () => { setTasks((l) => l.map((t) => (t.id === id ? { ...t, ...(body as Partial<Task>) } : t))); return () => setTasks((l) => l.map((t) => (t.id === id ? prev : t))) },
-      () => db().from('taskflow_tasks').update(body).eq('id', id))
-  }, [write, setTasks])
+    setTasks((l) => l.map((t) => (t.id === id ? { ...t, ...(body as Partial<Task>) } : t)))
+    outboxRef.current.enqueue({ kind: 'task.patch', id, patch: body })
+    return true
+  }, [setTasks])
 
   const setDone = useCallback<TasksApi['setDone']>((id, done) => update(id, { status: done ? 'done' : 'todo' }), [update])
 
   const remove = useCallback<TasksApi['remove']>(async (id) => {
-    const removed = ref.current.filter((t) => t.id === id || t.parent_id === id)
-    if (removed.length === 0) return false
-    return write('Deleting the task',
-      () => { setTasks((l) => l.filter((t) => t.id !== id && t.parent_id !== id)); return () => setTasks((l) => [...l, ...removed]) },
-      () => db().from('taskflow_tasks').delete().eq('id', id))
-  }, [write, setTasks])
+    if (!ref.current.some((t) => t.id === id || t.parent_id === id)) return false
+    setTasks((l) => l.filter((t) => t.id !== id && t.parent_id !== id))
+    outboxRef.current.enqueue({ kind: 'task.remove', id })
+    return true
+  }, [setTasks])
 
   const reorder = useCallback<TasksApi['reorder']>(async (changes) => {
     if (changes.length === 0) return true
-    const prevSorts = new Map(ref.current.map((t) => [t.id, t.sort]))
     const next = new Map(changes.map((c) => [c.id, c.sort]))
-    return write('Reordering',
-      () => { setTasks((l) => l.map((t) => (next.has(t.id) ? { ...t, sort: next.get(t.id)! } : t))); return () => setTasks((l) => l.map((t) => (next.has(t.id) ? { ...t, sort: prevSorts.get(t.id)! } : t))) },
-      async () => {
-        const results = await Promise.all(changes.map((c) => db().from('taskflow_tasks').update({ sort: c.sort }).eq('id', c.id)))
-        const failed = results.find((r) => r.error)
-        return { error: failed?.error ? { message: errorMessage(failed.error) } : null }
-      })
-  }, [write, setTasks])
+    setTasks((l) => l.map((t) => (next.has(t.id) ? { ...t, sort: next.get(t.id)! } : t)))
+    for (const c of changes) outboxRef.current.enqueue({ kind: 'task.patch', id: c.id, patch: { sort: c.sort } })
+    return true
+  }, [setTasks])
 
   const api = useMemo<TasksApi>(() => ({ tasks, loading, add, update, setDone, remove, reorder }), [tasks, loading, add, update, setDone, remove, reorder])
 

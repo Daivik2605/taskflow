@@ -6,6 +6,8 @@ import {
   type Activity, type ActivityLog,
 } from '../lib/activities'
 import { db, errorMessage, friendlyDbError } from './db'
+import { RESYNC_EVENT, useOutbox } from './outbox'
+import { useOfflineCache } from './useOfflineCache'
 
 export interface NewActivity { name: string; area_id: string; default_minutes: number; weekly_target: number | null }
 export type ActivityPatch = Partial<Pick<Activity, 'name' | 'area_id' | 'default_minutes' | 'weekly_target' | 'allow_multiple' | 'archived'>>
@@ -58,6 +60,13 @@ export function ActivitiesProvider({ children }: { children: ReactNode }) {
   const setLogs = useCallback((fn: (p: ActivityLog[]) => ActivityLog[]) => { lRef.current = fn(lRef.current); setLogsState(lRef.current) }, [])
   const writesOff = useRef(writesDisabled)
   writesOff.current = writesDisabled
+  const outbox = useOutbox()
+  const outboxRef = useRef(outbox)
+  outboxRef.current = outbox
+  const loadedRef = useRef(false)
+
+  const cached = useMemo(() => ({ activities, logs }), [activities, logs])
+  useOfflineCache('activities', cached, !loading, (s) => { setActivities(() => s.activities); setLogs(() => s.logs); setLoading(false) }, () => loadedRef.current)
 
   useEffect(() => {
     const client = db()
@@ -67,6 +76,8 @@ export function ActivitiesProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       if (a.error) { reportError(friendlyDbError(a.error)); return }
       if (l.error) { reportError(friendlyDbError(l.error)); return }
+      if (outboxRef.current.hasPending()) return // writes are waiting to be sent; a reload follows the sync
+      loadedRef.current = true
       setActivities(() => (a.data ?? []) as Activity[])
       setLogs(() => l.data)
       setLoading(false)
@@ -90,14 +101,16 @@ export function ActivitiesProvider({ children }: { children: ReactNode }) {
         }
       })
     const onVisible = () => { if (document.visibilityState === 'visible') void load() }
+    const onResync = () => void load()
     document.addEventListener('visibilitychange', onVisible)
-    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible); void client.removeChannel(channel) }
+    window.addEventListener(RESYNC_EVENT, onResync)
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible); window.removeEventListener(RESYNC_EVENT, onResync); void client.removeChannel(channel) }
   }, [setActivities, setLogs, reportError])
 
   const offline = useCallback(() => toast.show("You're offline or Supabase is unreachable — changes are turned off."), [toast])
 
+  // Logging goes through the offline queue: the log shows at once and is sent when the network allows. The client id makes a replay harmless.
   const log = useCallback<ActivitiesApi['log']>(async (activityId, opts = {}) => {
-    if (writesOff.current) { offline(); return null }
     const activity = aRef.current.find((a) => a.id === activityId)
     if (!activity) return null
     const { minutes = activity.default_minutes, endedAt = new Date(), id = crypto.randomUUID() } = opts
@@ -105,25 +118,16 @@ export function ActivitiesProvider({ children }: { children: ReactNode }) {
     if (problem) { toast.show(problem); return null }
     const row = buildLog(activity, minutes, endedAt, id)
     setLogs((l) => (l.some((x) => x.id === id) ? l : [...l, row]))
-    // The id is ours, so sending this twice (a retry, later the offline queue) is harmless: the function returns the existing row.
-    const { error } = await db().rpc('taskflow_log_activity', { p_id: id, p_preset: activityId, p_minutes: minutes, p_ended_at: row.ended_at })
-    if (error) {
-      setLogs((l) => l.filter((x) => x.id !== id))
-      toast.show(`Couldn't log ${activity.name}: ${friendlyDbError(error)}`, () => void log(activityId, { minutes, endedAt, id }))
-      return null
-    }
+    outboxRef.current.enqueue({ kind: 'activity.log', id, preset: activityId, minutes, ended_at: row.ended_at })
     return row
-  }, [offline, setLogs, toast])
+  }, [setLogs, toast])
 
   const removeLog = useCallback<ActivitiesApi['removeLog']>(async (id) => {
-    if (writesOff.current) { offline(); return false }
-    const prev = lRef.current.find((l) => l.id === id)
-    if (!prev) return false
+    if (!lRef.current.some((l) => l.id === id)) return false
     setLogs((l) => l.filter((x) => x.id !== id))
-    const { error } = await db().from('taskflow_sessions').delete().eq('id', id)
-    if (error) { setLogs((l) => [...l, prev]); toast.show(`Couldn't remove it: ${friendlyDbError(error)}`); return false }
+    outboxRef.current.enqueue({ kind: 'session.remove', id })
     return true
-  }, [offline, setLogs, toast])
+  }, [setLogs])
 
   const add = useCallback<ActivitiesApi['add']>(async (input) => {
     if (writesOff.current) { offline(); return 'Changes are turned off while offline.' }

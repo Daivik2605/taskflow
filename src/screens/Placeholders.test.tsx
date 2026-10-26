@@ -3,12 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { MORE, moreItems } from '../app/nav'
 import { renderApp } from '../test-utils'
 import { Capture } from './Capture'
-import { Calendar, Inbox, Projects, Timer } from './screens'
+import { Calendar, Inbox, Projects } from './screens'
 import { Work } from './Work'
 
 describe('placeholder screens say what they will do (phase 3.7)', () => {
   it.each([
-    ['Timer', Timer, 4, /Start and stop a timer/],
     ['Calendar', Calendar, 8, /Shifts, days off and sleep/],
     ['Inbox', Inbox, 9, /Quick capture/],
     ['Projects', Projects, 10, /going-cold warnings/],

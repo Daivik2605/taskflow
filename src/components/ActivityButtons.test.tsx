@@ -61,12 +61,12 @@ describe('activity buttons', () => {
     const ids = (activitiesApi.log as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1].id)
     expect(new Set(ids).size).toBe(2)
   })
-  it('are turned off while offline', () => {
-    renderApp(<ActivityButtons />, { activities, logs })
+  it('stay usable while offline', () => {
+    const { activitiesApi } = renderApp(<ActivityButtons />, { activities, logs })
     act(() => { window.dispatchEvent(new Event('offline')) })
-    expect(btn(/^Gym/)).toBeDisabled()
-    act(() => { window.dispatchEvent(new Event('online')) })
-    expect(btn(/^Gym/)).toBeEnabled()
+    expect(btn(/^Kriya/)).toBeEnabled()
+    fireEvent.click(btn(/^Kriya/))
+    expect(activitiesApi.log).toHaveBeenCalledTimes(1)
   })
   it('have no emoji', () => {
     const { container } = renderApp(<ActivityButtons />, { activities, logs })

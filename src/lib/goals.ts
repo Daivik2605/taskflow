@@ -42,7 +42,7 @@ export const DIRECTION_SIGN: Record<Direction, string> = { at_least: '≥', at_m
 export interface GoalInputs {
   tasks: Task[]
   events: CounterEvent[]
-  /** Time on tags: stopped sessions. Until the timer exists (phase 4) these are just the activity-button logs. */
+  /** Time on tags: every stretch (activity-button logs and timer segments, an open one up to now). */
   sessions: ActivityLog[]
   /** Activity-button logs (for "Gym ≥ 3× / week"). */
   logs: ActivityLog[]

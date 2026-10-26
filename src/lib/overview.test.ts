@@ -127,3 +127,16 @@ describe('links', () => {
     expect(OVERVIEW_LINKS.counter('c1')).toBe('/insights?tab=counters&counter=c1')
   })
 })
+
+describe('timeCard (phase 4)', () => {
+  it('study, hustle and work minutes for the period, from the same intervals as Insights', async () => {
+    const { timeCard } = await import('./overview')
+    const { pastSession, sessionIntervals } = await import('./timer')
+    const { area } = await import('./fixtures')
+    const areas = [area({ id: 'st', name: 'st', kind: 'study' }), area({ id: 'dsa', name: 'dsa', kind: 'study', parent_id: 'st' }), area({ id: 'hu', name: 'hu', kind: 'hustle' }), area({ id: 'wk', name: 'wk', kind: 'work' }), area({ id: 'pe', name: 'pe', kind: 'personal' })]
+    const mk = (id: string, tag: string, start: string, min: number) => pastSession(id, id + 'g', { areaId: tag, start: new Date(start), end: new Date(new Date(start).getTime() + min * 60_000) })
+    const iv = sessionIntervals([mk('a', 'dsa', '2026-11-10T14:00:00Z', 90), mk('b', 'hu', '2026-11-10T16:00:00Z', 30), mk('c', 'wk', '2026-11-09T14:00:00Z', 60), mk('d', 'pe', '2026-11-10T18:00:00Z', 45)], new Date('2026-11-10T20:00:00Z'))
+    expect(timeCard(iv, areas, '2026-11-10', 'today')).toEqual({ study: 90, hustle: 30, work: 0, total: 120 })
+    expect(timeCard(iv, areas, '2026-11-10', 'week')).toEqual({ study: 90, hustle: 30, work: 60, total: 180 })
+  })
+})

@@ -2,7 +2,7 @@
 do $$ declare n int; begin
   select count(*) into n from pg_class c join pg_namespace s on s.oid = c.relnamespace
    where s.nspname = 'public' and c.relkind = 'r' and c.relname like 'taskflow\_%';
-  if n <> 20 then raise exception 'expected 20 taskflow tables, found %', n; end if;
+  if n <> 22 then raise exception 'expected 22 taskflow tables, found %', n; end if;
   select count(*) into n from pg_class c join pg_namespace s on s.oid = c.relnamespace
    where s.nspname = 'public' and c.relkind in ('r','v') and c.relname !~ '^taskflow_';
   if n <> 0 then raise exception 'objects without prefix: %', n; end if;
@@ -43,4 +43,10 @@ do $$ declare n int; begin
   if not exists (select 1 from pg_constraint where conname = 'taskflow_areas_kind_v2') then raise exception 'new kind check missing'; end if;
   if not exists (select 1 from pg_constraint where conname = 'taskflow_areas_parent_name_key') then raise exception 'per-parent unique key missing'; end if;
   if exists (select 1 from pg_constraint where conname = 'taskflow_areas_user_id_name_key') then raise exception 'old unique key still present'; end if;
+  -- phase 3.6: API tokens are stored hashed and unique; the log is read-only for the signed-in user (only the Edge Function writes it)
+  if not exists (select 1 from pg_indexes where indexname = 'taskflow_api_tokens_token_hash_key') then raise exception 'token hash is not unique'; end if;
+  if has_table_privilege('authenticated', 'public.taskflow_api_log', 'insert') then raise exception 'authenticated can write taskflow_api_log'; end if;
+  if not has_table_privilege('authenticated', 'public.taskflow_api_log', 'select') then raise exception 'authenticated cannot read taskflow_api_log'; end if;
+  if not has_table_privilege('authenticated', 'public.taskflow_api_tokens', 'insert') then raise exception 'authenticated cannot create tokens'; end if;
+  if has_table_privilege('anon', 'public.taskflow_api_tokens', 'select') then raise exception 'anon can read taskflow_api_tokens'; end if;
 end $$;

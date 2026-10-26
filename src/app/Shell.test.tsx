@@ -51,10 +51,10 @@ describe('ConnectionBanner', () => {
     render(<ConnectionProvider><ConnectionBanner /></ConnectionProvider>)
     expect(screen.queryByRole('alert')).toBeNull()
   })
-  it('warns and disables changes when the browser goes offline', async () => {
+  it('warns when the browser goes offline, and says logging still works', async () => {
     render(<ConnectionProvider><ConnectionBanner /></ConnectionProvider>)
     act(() => { window.dispatchEvent(new Event('offline')) })
-    expect(await screen.findByRole('alert')).toHaveTextContent(/offline.*changes are turned off/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/offline.*logging still works/i)
     act(() => { window.dispatchEvent(new Event('online')) })
   })
 })
